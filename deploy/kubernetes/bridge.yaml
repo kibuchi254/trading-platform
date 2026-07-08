@@ -1,0 +1,75 @@
+# ATLAS Bridge — Kubernetes deployment (sticky-session via StatefulSet)
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: atlas-bridge
+  namespace: atlas
+  labels:
+    app.kubernetes.io/name: atlas-bridge
+spec:
+  serviceName: atlas-bridge
+  replicas: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: atlas-bridge
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: atlas-bridge
+    spec:
+      terminationGracePeriodSeconds: 60  # allow pending commands to drain
+      containers:
+        - name: bridge
+          image: ghcr.io/atlas/atlas-api:latest
+          command: ["python", "-m", "platform.bridge.server", "--host", "0.0.0.0", "--port", "9000"]
+          ports:
+            - name: ws
+              containerPort: 9000
+            - name: metrics
+              containerPort: 9090
+          envFrom:
+            - configMapRef:
+                name: atlas-config
+            - secretRef:
+                name: atlas-secrets
+          resources:
+            requests:
+              cpu: 200m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          readinessProbe:
+            tcpSocket:
+              port: 9000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 9000
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "sleep 30"]  # drain terminals
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: atlas-bridge
+  namespace: atlas
+  annotations:
+    # HAProxy-style session affinity for terminal_id stickiness
+    service.beta.kubernetes.io/aws-load-balancer-type: nlb
+spec:
+  selector:
+    app.kubernetes.io/name: atlas-bridge
+  ports:
+    - name: ws
+      port: 9000
+      targetPort: 9000
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 3600

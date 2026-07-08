@@ -1,0 +1,116 @@
+[project]
+name = "atlas-trading-platform"
+version = "0.1.0"
+description = "ATLAS — Enterprise AI-powered algorithmic trading platform (MT5-native, multi-tenant SaaS)"
+readme = "README.md"
+requires-python = ">=3.13"
+authors = [{ name = "ATLAS Team" }]
+license = { text = "Proprietary" }
+
+dependencies = [
+    # Web framework
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "websockets>=13.0",
+    "sse-starlette>=2.1.0",
+
+    # Async / DB
+    "sqlalchemy[asyncio]>=2.0.36",
+    "asyncpg>=0.30.0",
+    "alembic>=1.14.0",
+    "redis>=5.2.0",
+    "kombu>=5.4.0",
+
+    # Task queue
+    "celery>=5.4.0",
+    "flower>=2.0.1",
+
+    # Schemas / validation
+    "pydantic>=2.10.0",
+    "pydantic-settings>=2.6.0",
+    "email-validator>=2.2.0",
+
+    # Security
+    "passlib[bcrypt]>=1.7.4",
+    "pyjwt[crypto]>=2.10.0",
+    "cryptography>=43.0.0",
+    "python-multipart>=0.0.12",
+
+    # AI / ML
+    "scikit-learn>=1.5.0",
+    "xgboost>=2.1.0",
+    "numpy>=2.1.0",
+    "pandas>=2.2.0",
+    "onnxruntime>=1.20.0",
+    "httpx>=0.28.0",  # for LLM API calls
+    "openai>=1.55.0", # optional LLM assistant backend
+
+    # Observability
+    "prometheus-client>=0.21.0",
+    "opentelemetry-api>=1.28.0",
+    "opentelemetry-sdk>=1.28.0",
+    "opentelemetry-instrumentation-fastapi>=0.49b0",
+    "opentelemetry-exporter-otlp>=1.28.0",
+    "structlog>=24.4.0",
+
+    # Utils
+    "python-dotenv>=1.0.1",
+    "tenacity>=9.0.0",
+    "orjson>=3.10.0",
+    "pendulum>=3.0.0",
+    "click>=8.1.0",
+    "rich>=13.9.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "pytest-cov>=6.0.0",
+    "pytest-mock>=3.14.0",
+    "httpx>=0.28.0",
+    "fakeredis>=2.26.0",
+    "asgi-lifespan>=2.1.0",
+    "mypy>=1.13.0",
+    "ruff>=0.7.0",
+    "black>=24.10.0",
+    "respx>=0.21.0",
+]
+
+[project.scripts]
+atlas = "platform.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/platform"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "B", "UP", "RUF", "SIM", "ASYNC"]
+ignore = ["E501"]
+
+[tool.black]
+line-length = 100
+target-version = ["py313"]
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+plugins = ["pydantic.mypy"]
+exclude = ["alembic/versions/"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+addopts = "-ra --strict-markers --cov=platform --cov-report=term-missing"
+
+[tool.coverage.run]
+source = ["src/platform"]
+omit = ["*/tests/*", "*/alembic/*"]

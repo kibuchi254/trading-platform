@@ -1,0 +1,36 @@
+# ATLAS — Kubernetes ConfigMap + Secrets (template)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: atlas-config
+  namespace: atlas
+data:
+  APP_NAME: "atlas"
+  ENV: "production"
+  LOG_LEVEL: "INFO"
+  API_HOST: "0.0.0.0"
+  API_PORT: "8000"
+  BRIDGE_HOST: "0.0.0.0"
+  BRIDGE_PORT: "9000"
+  BRIDGE_HEARTBEAT_TIMEOUT_SECONDS: "30"
+  DATABASE_URL: "postgresql+asyncpg://atlas:$(DB_PASSWORD)@atlas-postgres/atlas"
+  REDIS_URL: "redis://atlas-redis:6379/0"
+  CELERY_BROKER_URL: "redis://atlas-redis:6379/1"
+  CELERY_RESULT_BACKEND: "redis://atlas-redis:6379/2"
+  LLM_PROVIDER: "none"
+  PROMETHEUS_METRICS_PORT: "9090"
+  CORS_ORIGINS: "https://app.atlas.example.com"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: atlas-secrets
+  namespace: atlas
+type: Opaque
+stringData:
+  SECRET_KEY: "CHANGE_ME_TO_A_LONG_RANDOM_STRING"
+  BRIDGE_AUTH_TOKEN: "CHANGE_ME_BRIDGE_TOKEN"
+  DB_PASSWORD: "CHANGE_ME_DB_PASSWORD"
+  # LLM_API_KEY: ""
+  # TELEGRAM_BOT_TOKEN: ""
+  # DISCORD_WEBHOOK_URL: ""

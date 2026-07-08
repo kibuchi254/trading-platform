@@ -1,0 +1,107 @@
+# ATLAS — single-VM Docker Compose stack
+# Designed for the existing Ubuntu 22.04 server. Scales out by splitting services
+# across hosts and pointing DATABASE_URL / REDIS_URL at shared instances.
+# ----------------------------------------------------------------------
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: atlas
+      POSTGRES_PASSWORD: atlas
+      POSTGRES_DB: atlas
+    ports: ["5432:5432"]
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U atlas"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --maxmemory 512mb --maxmemory-policy allkeys-lru --save ""
+    ports: ["6379:6379"]
+    volumes:
+      - redis_data:/data
+
+  api:
+    build:
+      context: ../
+      dockerfile: docker/backend.Dockerfile
+    restart: unless-stopped
+    env_file: ../.env
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_started }
+    ports: ["8000:8000"]
+    command: >
+      uvicorn platform.main:app
+      --host 0.0.0.0 --port 8000
+      --workers 4 --loop uvloop --http httptools
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  bridge:
+    build:
+      context: ../
+      dockerfile: docker/backend.Dockerfile
+    restart: unless-stopped
+    env_file: ../.env
+    depends_on:
+      redis: { condition: service_started }
+    ports: ["9000:9000"]
+    command: python -m platform.bridge.server --host 0.0.0.0 --port 9000
+
+  worker:
+    build:
+      context: ../
+      dockerfile: docker/backend.Dockerfile
+    restart: unless-stopped
+    env_file: ../.env
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_started }
+    command: celery -A platform.infrastructure.celery_app worker --loglevel=info --concurrency=8
+
+  flower:
+    image: mher/flower:2.0
+    restart: unless-stopped
+    env_file: ../.env
+    ports: ["5555:5555"]
+    command: celery --broker=${CELERY_BROKER_URL} flower --port=5555
+
+  prometheus:
+    image: prom/prometheus:latest
+    restart: unless-stopped
+    ports: ["9091:9090"]
+    volumes:
+      - ../monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+
+  grafana:
+    image: grafana/grafana-oss:latest
+    restart: unless-stopped
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    ports: ["3000:3000"]
+    volumes:
+      - grafana_data:/var/lib/grafana
+
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+    depends_on: [api, bridge]
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ../monitoring/nginx.conf:/etc/nginx/nginx.conf:ro
+
+volumes:
+  postgres_data:
+  redis_data:
+  grafana_data:

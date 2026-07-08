@@ -1,0 +1,124 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+
+env:
+  PYTHON_VERSION: "3.13"
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - run: uv python install ${{ env.PYTHON_VERSION }}
+      - run: uv venv --python ${{ env.PYTHON_VERSION }}
+      - run: uv pip install -e ".[dev]"
+      - run: uv run ruff check src/ tests/
+      - run: uv run black --check src/ tests/
+
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - run: uv venv --python ${{ env.PYTHON_VERSION }}
+      - run: uv pip install -e ".[dev]"
+      - run: uv run mypy src/platform/
+
+  unit-tests:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: atlas
+          POSTGRES_PASSWORD: atlas
+          POSTGRES_DB: atlas_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - run: uv venv --python ${{ env.PYTHON_VERSION }}
+      - run: uv pip install -e ".[dev]"
+      - run: uv run alembic upgrade head
+        env:
+          DATABASE_URL: postgresql+asyncpg://atlas:atlas@localhost:5432/atlas_test
+      - run: uv run pytest tests/unit -v --cov=platform --cov-report=xml
+        env:
+          DATABASE_URL: postgresql+asyncpg://atlas:atlas@localhost:5432/atlas_test
+          REDIS_URL: redis://localhost:6379/0
+          ENV: test
+          SECRET_KEY: ci-secret-key-at-least-16-chars-long
+          BRIDGE_AUTH_TOKEN: ci-bridge-token
+      - uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.xml
+
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - run: uv venv --python ${{ env.PYTHON_VERSION }}
+      - run: uv pip install -e ".[dev]"
+      - run: uv run pip-audit --strict || true
+      - run: uv run bandit -r src/platform/ -ll || true
+
+  build-images:
+    needs: [lint, typecheck, unit-tests]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build API image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: docker/backend.Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}/atlas-api:latest
+            ghcr.io/${{ github.repository }}/atlas-api:${{ github.sha }}
+
+  deploy-staging:
+    needs: [build-images]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy to staging
+        run: echo "Deploying to staging..."
+
+  deploy-production:
+    needs: [build-images]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy to production
+        run: echo "Deploying ${{ github.ref_name }} to production..."

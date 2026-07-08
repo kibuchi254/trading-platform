@@ -1,0 +1,8 @@
+# ATLAS — Kubernetes namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: atlas
+  labels:
+    app.kubernetes.io/name: atlas
+    app.kubernetes.io/part-of: atlas-platform
