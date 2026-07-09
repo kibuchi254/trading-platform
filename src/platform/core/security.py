@@ -9,10 +9,9 @@ from datetime import UTC, datetime, timedelta
 from platform.core.config import get_settings
 from typing import Literal
 
+import bcrypt
 import jwt
-from passlib.context import CryptContext
 
-_pwd = CryptContext(schemes=["bcrypt"], deprecated="auto", bcrypt__rounds=12)
 Alg = Literal["HS256", "HS384", "HS512", "RS256"]
 
 
@@ -25,11 +24,15 @@ class TokenPair:
 
 
 def hash_password(raw: str) -> str:
-    return _pwd.hash(raw)
+    salt = bcrypt.gensalt(rounds=12)
+    return bcrypt.hashpw(raw.encode("utf-8"), salt).decode("utf-8")
 
 
 def verify_password(raw: str, hashed: str) -> bool:
-    return _pwd.verify(raw, hashed)
+    try:
+        return bcrypt.checkpw(raw.encode("utf-8"), hashed.encode("utf-8"))
+    except Exception:
+        return False
 
 
 def _encode(payload: dict[str, object], ttl: int) -> str:
@@ -74,8 +77,8 @@ def generate_api_key() -> tuple[str, str]:
     """Return (raw_key, hashed_key). The raw key is shown once to the user;
     only the hashed form is persisted."""
     raw = f"atlas_{_secrets.token_urlsafe(32)}"
-    return raw, _pwd.hash(raw)
+    return raw, hash_password(raw)
 
 
 def verify_api_key(raw: str, hashed: str) -> bool:
-    return _pwd.verify(raw, hashed)
+    return verify_password(raw, hashed)

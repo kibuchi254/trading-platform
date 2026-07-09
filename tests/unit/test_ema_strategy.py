@@ -12,8 +12,8 @@ async def test_ema_cross_emits_buy_on_bullish_cross() -> None:
     strat = EMACrossStrategy(fast_period=3, slow_period=5, min_strength=0.0)
     ctx = StrategyContext(org_id=uuid4(), terminal_id="t1", strategy_id=uuid4())
 
-    # Feed rising prices to trigger a bullish cross
-    prices = [100.0, 101.0, 102.0, 103.0, 104.0, 105.0, 106.0, 107.0, 108.0, 109.0]
+    # Feed falling then rising prices to trigger a bullish cross
+    prices = [100.0, 99.0, 98.0, 97.0, 96.0, 95.0, 96.0, 98.0, 101.0, 105.0]
     signals = []
     base = datetime(2026, 1, 1, tzinfo=UTC)
     for i, p in enumerate(prices):
