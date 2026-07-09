@@ -35,6 +35,8 @@ jobs:
   deploy:
     name: Deploy → Production
     runs-on: ubuntu-latest
+    env:
+      HAS_SSH_HOST: ${{ secrets.SSH_HOST != '' }}
 
     # Only run if triggered manually, OR if the CI workflow that triggered us passed
     if: |
@@ -73,6 +75,7 @@ jobs:
           echo "Deploying: ${IMAGE}"
 
       - name: Copy compose file and configs to server
+        if: env.HAS_SSH_HOST == 'true'
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.SSH_HOST }}
@@ -84,6 +87,7 @@ jobs:
           strip_components: 0
 
       - name: Deploy via SSH
+        if: env.HAS_SSH_HOST == 'true'
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.SSH_HOST }}
@@ -145,6 +149,7 @@ jobs:
           GITHUB_REPOSITORY: ${{ github.repository }}
 
       - name: Health check
+        if: env.HAS_SSH_HOST == 'true'
         run: |
           echo "Waiting 30s for containers to fully start..."
           sleep 30
@@ -163,7 +168,7 @@ jobs:
           exit 1
 
       - name: Rollback on failure
-        if: failure()
+        if: failure() && env.HAS_SSH_HOST == 'true'
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.SSH_HOST }}
@@ -182,7 +187,7 @@ jobs:
               ps
 
       - name: Deployment summary
-        if: success()
+        if: success() && env.HAS_SSH_HOST == 'true'
         run: |
           echo "### ✅ Production Deployed" >> $GITHUB_STEP_SUMMARY
           echo "| | |" >> $GITHUB_STEP_SUMMARY
