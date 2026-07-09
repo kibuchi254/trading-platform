@@ -6,11 +6,12 @@ import os
 import sys
 from pathlib import Path
 
-# Make the src/ directory importable
+# Make `platform` importable without shadowing standard library platform module
+import platform
 ROOT = Path(__file__).resolve().parent.parent
-SRC = ROOT / "src"
-if str(SRC) not in sys.path:
-    sys.path.insert(0, str(SRC))
+platform_path = ROOT / "src" / "platform"
+if not hasattr(platform, "__path__"):
+    platform.__path__ = [str(platform_path)]
 
 # Set test environment
 os.environ.setdefault("ENV", "test")
