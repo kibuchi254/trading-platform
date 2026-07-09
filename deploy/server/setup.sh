@@ -15,7 +15,7 @@
 set -euo pipefail
 
 # ── Configuration ─────────────────────────────────────────────────────────────
-SSH_PORT=2847                          # Custom SSH port (not the default 22)
+APP_PORT=2847                          # External port for the ATLAS API
 DEPLOY_USER="deploy"                   # Dedicated low-privilege deploy user
 DEPLOY_DIR="/opt/atlas"                # Where compose files and .env live
 SSH_PUBKEY="${SSH_PUBKEY:-}"           # GitHub Actions public key (set or prompted)
@@ -148,35 +148,18 @@ ENVEOF
 fi
 
 # ══════════════════════════════════════════════════════════════════════════════
-step "Step 6 — SSH on Custom Port ${SSH_PORT}"
+step "Step 6 — SSH Security Hardening (keeping port 22)"
 # ══════════════════════════════════════════════════════════════════════════════
 SSHD_CONFIG="/etc/ssh/sshd_config"
+cp "${SSHD_CONFIG}" "${SSHD_CONFIG}.bak.$(date +%Y%m%d)" 2>/dev/null || true
 
-# Add custom port (keep 22 temporarily until we confirm it works)
-if grep -q "^Port ${SSH_PORT}" "${SSHD_CONFIG}"; then
-  ok "SSH already listening on port ${SSH_PORT}"
-else
-  # Backup original config
-  cp "${SSHD_CONFIG}" "${SSHD_CONFIG}.bak.$(date +%Y%m%d)"
+# Security hardening — SSH stays on port 22
+sed -i 's/^#\?PubkeyAuthentication.*/PubkeyAuthentication yes/' "${SSHD_CONFIG}"
+sed -i 's/^#\?X11Forwarding.*/X11Forwarding no/' "${SSHD_CONFIG}"
+sed -i 's/^#\?MaxAuthTries.*/MaxAuthTries 5/' "${SSHD_CONFIG}"
 
-  # Add port 2847 (keep existing Port line if present, or add alongside default)
-  if grep -q "^Port " "${SSHD_CONFIG}"; then
-    sed -i "s/^Port .*/Port ${SSH_PORT}/" "${SSHD_CONFIG}"
-  else
-    echo "Port ${SSH_PORT}" >> "${SSHD_CONFIG}"
-  fi
-
-  # Security hardening while we're here
-  sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin no/' "${SSHD_CONFIG}"
-  sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' "${SSHD_CONFIG}"
-  sed -i 's/^#\?PubkeyAuthentication.*/PubkeyAuthentication yes/' "${SSHD_CONFIG}"
-  sed -i 's/^#\?X11Forwarding.*/X11Forwarding no/' "${SSHD_CONFIG}"
-  sed -i 's/^#\?MaxAuthTries.*/MaxAuthTries 3/' "${SSHD_CONFIG}"
-
-  # Validate config before restarting
-  sshd -t && systemctl restart ssh
-  ok "SSH moved to port ${SSH_PORT}, root login disabled, password auth disabled"
-fi
+sshd -t && systemctl restart ssh
+ok "SSH staying on port 22, pubkey auth enforced"
 
 # ══════════════════════════════════════════════════════════════════════════════
 step "Step 7 — SSH Authorized Key for GitHub Actions"
@@ -197,41 +180,36 @@ if [[ -n "${SSH_PUBKEY}" ]]; then
     ok "SSH public key added to ${AUTH_KEYS}"
   fi
 else
-  warn "SSH_PUBKEY not set. After running this script, add your key manually:"
-  warn ""
-  warn "  # On your LOCAL machine, generate a key pair:"
+  warn "SSH_PUBKEY not set. Add your GitHub Actions public key after setup:"
   warn "  ssh-keygen -t ed25519 -C 'github-actions-atlas' -f ~/.ssh/atlas_deploy"
-  warn ""
-  warn "  # Then add the PUBLIC key to the server:"
-  warn "  ssh-copy-id -i ~/.ssh/atlas_deploy.pub -p ${SSH_PORT} ${DEPLOY_USER}@<server-ip>"
-  warn ""
-  warn "  # And add the PRIVATE key content as SSH_PRIVATE_KEY in GitHub Secrets."
+  warn "  ssh-copy-id -i ~/.ssh/atlas_deploy.pub deploy@<server-ip>"
+  warn "  Then paste the private key as SSH_PRIVATE_KEY in GitHub Secrets."
 fi
 
 # ══════════════════════════════════════════════════════════════════════════════
 step "Step 8 — Firewall (UFW)"
 # ══════════════════════════════════════════════════════════════════════════════
+apt-get install -y -qq ufw
 ufw --force reset > /dev/null
 ufw default deny incoming
 ufw default allow outgoing
 
-# Custom SSH port only — port 22 is NOT opened
-ufw allow "${SSH_PORT}/tcp" comment "SSH (custom port)"
-ufw allow 80/tcp   comment "HTTP"
-ufw allow 443/tcp  comment "HTTPS"
+ufw allow 22/tcp             comment "SSH"
+ufw allow 80/tcp             comment "HTTP"
+ufw allow 443/tcp            comment "HTTPS"
+ufw allow "${APP_PORT}/tcp" comment "ATLAS API"
 
 ufw --force enable
 ok "Firewall enabled:"
-ok "  - Port ${SSH_PORT}/tcp (SSH)"
-ok "  - Port 80/tcp  (HTTP)"
-ok "  - Port 443/tcp (HTTPS)"
-ok "  - Port 22 is BLOCKED"
+ok "  - Port 22/tcp        (SSH)"
+ok "  - Port 80/tcp        (HTTP)"
+ok "  - Port 443/tcp       (HTTPS)"
+ok "  - Port ${APP_PORT}/tcp  (ATLAS API)"
 
 # ══════════════════════════════════════════════════════════════════════════════
 step "Step 9 — Fail2Ban (brute-force protection)"
 # ══════════════════════════════════════════════════════════════════════════════
-# Configure fail2ban to watch the custom SSH port
-cat > /etc/fail2ban/jail.local <<EOF
+cat > /etc/fail2ban/jail.local <<'EOF'
 [DEFAULT]
 bantime  = 3600
 findtime = 600
@@ -239,12 +217,12 @@ maxretry = 5
 
 [sshd]
 enabled  = true
-port     = ${SSH_PORT}
+port     = 22
 logpath  = /var/log/auth.log
 maxretry = 3
 EOF
 systemctl enable --now fail2ban
-ok "Fail2Ban configured (SSH port ${SSH_PORT}, ban after 3 failed attempts)"
+ok "Fail2Ban configured (SSH port 22, ban after 3 failed attempts)"
 
 # ══════════════════════════════════════════════════════════════════════════════
 step "Step 10 — Docker Log Rotation"
@@ -286,7 +264,8 @@ echo -e "${GREEN}║         ATLAS Server Setup Complete!                      �
 echo -e "${GREEN}╚═══════════════════════════════════════════════════════════╝${NC}"
 echo ""
 echo -e "  Server IP   : ${CYAN}${SERVER_IP}${NC}"
-echo -e "  SSH port    : ${CYAN}${SSH_PORT}${NC}  (port 22 is now BLOCKED)"
+echo -e "  SSH port    : ${CYAN}22${NC}  (standard)"
+echo -e "  App port    : ${CYAN}${APP_PORT}${NC}  (ATLAS API external port)"
 echo -e "  Deploy dir  : ${CYAN}${DEPLOY_DIR}${NC}"
 echo -e "  Deploy user : ${CYAN}${DEPLOY_USER}${NC}"
 echo ""
@@ -297,23 +276,22 @@ echo "   nano ${DEPLOY_DIR}/.env"
 echo ""
 echo -e "${YELLOW}2. Generate an SSH key pair${NC} on your LOCAL machine:"
 echo "   ssh-keygen -t ed25519 -C 'github-actions-atlas' -f ~/.ssh/atlas_deploy"
-echo "   ssh-copy-id -i ~/.ssh/atlas_deploy.pub -p ${SSH_PORT} ${DEPLOY_USER}@${SERVER_IP}"
+echo "   ssh-copy-id -i ~/.ssh/atlas_deploy.pub deploy@${SERVER_IP}"
 echo ""
 echo -e "${YELLOW}3. Add these secrets${NC} in GitHub → Settings → Secrets → Actions:"
 echo "   SSH_HOST          = ${SERVER_IP}"
 echo "   SSH_USER          = ${DEPLOY_USER}"
-echo "   SSH_PORT          = ${SSH_PORT}"
+echo "   SSH_PORT          = 22"
 echo "   SSH_PRIVATE_KEY   = <contents of ~/.ssh/atlas_deploy>"
 echo "   GHCR_TOKEN        = <GitHub PAT with read:packages>"
-echo "   PRODUCTION_URL    = https://api.atlas.example.com"
-echo "   HEALTH_URL        = https://api.atlas.example.com/health/live"
+echo "   PRODUCTION_URL    = http://${SERVER_IP}:${APP_PORT}"
+echo "   HEALTH_URL        = http://${SERVER_IP}:${APP_PORT}/health/live"
 echo ""
 echo -e "${YELLOW}4. Create a GitHub Environment${NC} named 'production':"
 echo "   GitHub → Settings → Environments → New environment → production"
-echo "   (Optionally add required reviewers for approval gate)"
 echo ""
 echo -e "${YELLOW}5. Test your SSH connection${NC}:"
-echo "   ssh -p ${SSH_PORT} ${DEPLOY_USER}@${SERVER_IP}"
+echo "   ssh deploy@${SERVER_IP}"
 echo ""
 echo -e "${YELLOW}6. Push to main${NC} to trigger your first deploy!"
 echo ""

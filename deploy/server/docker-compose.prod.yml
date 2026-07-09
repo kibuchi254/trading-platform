@@ -75,7 +75,7 @@ services:
   api:
     <<: *app-base
     ports:
-      - "127.0.0.1:8000:8000"   # Bind to loopback — nginx reverse-proxies externally
+      - "0.0.0.0:2847:8000"   # External app port 2847 → internal API port 8000
     command: >
       uvicorn platform.main:app
       --host 0.0.0.0 --port 8000
@@ -94,7 +94,7 @@ services:
       redis:
         condition: service_started
     ports:
-      - "127.0.0.1:9000:9000"   # Bind to loopback — nginx proxies WebSocket externally
+      - "0.0.0.0:2848:9000"   # External app port 2848 → internal bridge port 9000
     command: python -m platform.bridge.server --host 0.0.0.0 --port 9000
     healthcheck:
       test: ["CMD", "python", "-c", "import socket; s=socket.socket(); s.connect(('localhost', 9000)); s.close()"]
