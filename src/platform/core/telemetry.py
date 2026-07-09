@@ -66,8 +66,18 @@ def start_metrics_server() -> None:
     settings = get_settings()
     if settings.env == "test":
         return
-    start_http_server(settings.prometheus_metrics_port)
-    _log.info("metrics_server_started", port=settings.prometheus_metrics_port)
+    try:
+        start_http_server(settings.prometheus_metrics_port)
+        _log.info("metrics_server_started", port=settings.prometheus_metrics_port)
+    except OSError as e:
+        if e.errno in (98, 48, 10048):
+            _log.info(
+                "metrics_server_already_running",
+                port=settings.prometheus_metrics_port,
+                reason=str(e),
+            )
+        else:
+            raise
 
 
 def setup_tracing(app_name: str) -> Any:
