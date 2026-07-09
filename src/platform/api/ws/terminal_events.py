@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from platform.core.logging import get_logger
 from platform.events.bus import get_event_bus
 from platform.events.topics import Topic
@@ -31,10 +32,8 @@ async def terminal_events_ws(ws: WebSocket) -> None:
     queue: asyncio.Queue[dict] = asyncio.Queue(maxsize=200)
 
     async def handler(payload: dict) -> None:
-        try:
+        with contextlib.suppress(asyncio.QueueFull):
             queue.put_nowait(payload)
-        except asyncio.QueueFull:
-            pass
 
     bus = get_event_bus()
     bus.subscribe(Topic.TERMINAL_EVENTS, handler)

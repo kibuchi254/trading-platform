@@ -123,7 +123,7 @@ class PluginLoader:
 
         Safe to call multiple times — already-imported modules are skipped.
         """
-        for kind, package_path in BUILTIN_PACKAGES:
+        for _kind, package_path in BUILTIN_PACKAGES:
             try:
                 package = importlib.import_module(package_path)
             except Exception:
@@ -160,7 +160,7 @@ class PluginLoader:
             _log.warning("entry_points_unavailable")
             return
 
-        for group, kind in ENTRY_POINT_GROUPS.items():
+        for group, _kind in ENTRY_POINT_GROUPS.items():
             group_eps = self._select_group(eps, group)
             for ep in group_eps:
                 ep_key = f"{group}:{ep.name}"

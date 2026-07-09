@@ -11,6 +11,7 @@ For at-least-once delivery with retries, use Celery tasks as subscribers
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 from collections import defaultdict
 from collections.abc import Awaitable, Callable
@@ -44,10 +45,8 @@ class EventBus:
     async def disconnect(self) -> None:
         if self._pubsub_task:
             self._pubsub_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._pubsub_task
-            except asyncio.CancelledError:
-                pass
         if self._redis:
             await self._redis.close()
 

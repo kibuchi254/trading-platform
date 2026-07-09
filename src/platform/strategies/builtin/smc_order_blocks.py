@@ -128,7 +128,7 @@ class SMCOrderBlocksStrategy(Strategy):
                 lambda hi, lo, p: min(1.0, 0.5 + (p - lo) / (hi - lo + 1e-9) * 0.5),
             ),
         ]:
-            for idx, bt, hi, lo in self._blocks:
+            for _idx, bt, hi, lo in self._blocks:
                 if bt != btype or not (lo <= price <= hi):
                     continue
                 if self.require_fvg and not any(

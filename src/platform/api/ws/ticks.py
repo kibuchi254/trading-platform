@@ -29,7 +29,7 @@ async def ticks_ws(ws: WebSocket) -> None:
     try:
         from platform.core.security import decode_token
 
-        claims = decode_token(token)
+        decode_token(token)
     except Exception:
         await ws.close(code=4401, reason="Bad token")
         return

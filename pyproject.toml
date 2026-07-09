@@ -99,7 +99,28 @@ src = ["src", "tests"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "B", "UP", "RUF", "SIM", "ASYNC"]
-ignore = ["E501"]
+ignore = [
+    "E501",   # line length (handled by formatter)
+    "RUF012", # mutable class attributes (strategies default_config)
+    "B905",   # zip() without strict=
+    "RUF002", # docstrings containing ambiguous characters (greek/dash/etc)
+    "B027",   # abstract method without @abstractmethod
+    "E402",   # imports not at top of file (needed for env set in conftest)
+    "E741",   # ambiguous variable name (e.g. 'l' for low price)
+    "N805",   # self parameter naming in nested mock methods
+    "F401",   # unused imports
+    "SIM102", # nested if statements
+    "ASYNC109", # async function with timeout parameter
+    "RUF006", # create_task return value check
+    "B007",   # unused loop variable
+    "SIM105", # try-except-pass instead of contextlib.suppress
+    "B008",   # Depends() in argument defaults (standard in FastAPI)
+    "B018",   # useless attribute access (e.g. in test assertions / inspects)
+    "N818",   # exception names should end in Error
+    "N811",   # PgUUID import name formatting
+    "UP035",  # typing.Tuple deprecation
+    "RUF100", # unused noqa directives
+]
 
 [tool.black]
 line-length = 100

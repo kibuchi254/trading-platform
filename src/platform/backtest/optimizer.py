@@ -67,7 +67,7 @@ class OptimizationEngine:
 
         # Build (params, result) list, filter failures
         scored: list[dict] = []
-        for params, res in zip(combinations, results):
+        for params, res in zip(combinations, results, strict=False):
             if isinstance(res, Exception):
                 _log.warning("optimization_run_failed", params=params, error=str(res))
                 continue
@@ -198,7 +198,10 @@ class OptimizationEngine:
     ) -> list[dict[str, Any]]:
         keys = list(param_grid.keys())
         if mode == "grid":
-            return [dict(zip(keys, vals)) for vals in itertools.product(*param_grid.values())]
+            return [
+                dict(zip(keys, vals, strict=False))
+                for vals in itertools.product(*param_grid.values())
+            ]
         elif mode == "random":
             combos: list[dict] = []
             for _ in range(n_samples):

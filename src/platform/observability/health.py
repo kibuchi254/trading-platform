@@ -29,7 +29,7 @@ import abc
 import asyncio
 import time
 from datetime import UTC, datetime
-from enum import Enum
+from enum import StrEnum
 from platform.core.logging import get_logger
 from typing import Any
 
@@ -38,7 +38,7 @@ from pydantic import BaseModel, Field
 _log = get_logger(__name__)
 
 
-class HealthState(str, Enum):
+class HealthState(StrEnum):
     """Three-state health enum used by every :class:`HealthStatus`."""
 
     HEALTHY = "HEALTHY"

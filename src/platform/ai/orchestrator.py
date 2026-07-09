@@ -82,7 +82,7 @@ class RiskAI(AIModule):
     version = "1.0.0"
 
     async def analyze(self, ctx: AIContext) -> AIPrediction:
-        atr = ctx.features.get("atr", 0)
+        ctx.features.get("atr", 0)
         atr_pct = ctx.features.get("atr_pct", 0)
         if atr_pct > 0.02:
             direction = "bearish"

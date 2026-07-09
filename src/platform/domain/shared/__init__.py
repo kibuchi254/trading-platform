@@ -53,7 +53,7 @@ class AggregateRoot(Entity):
 T = TypeVar("T", bound=AggregateRoot)
 
 
-class Repository(Protocol, Generic[T]):
+class Repository[T: AggregateRoot](Protocol):
     """Repository protocol — implemented per aggregate in infrastructure layer."""
 
     async def get(self, id: UUID) -> T | None: ...

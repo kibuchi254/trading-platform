@@ -9,6 +9,7 @@ backed map of `terminal_id → bridge_node_id` is consulted for routing
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from platform.core.exceptions import TerminalOffline
@@ -128,10 +129,8 @@ class TerminalRegistry:
     async def stop_watcher(self) -> None:
         if self._watcher_task is not None:
             self._watcher_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._watcher_task
-            except asyncio.CancelledError:
-                pass
             self._watcher_task = None
 
     async def _watch_loop(self) -> None:

@@ -17,6 +17,7 @@ Each replay runs in its own ``asyncio.Task`` and is tracked in
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from datetime import UTC, datetime
 from platform.core.logging import get_logger
 from platform.db.models import Tick
@@ -144,14 +145,10 @@ class ReplayEngine:
             return
         if state.task is not None and not state.task.done():
             state.task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await state.task
-            except asyncio.CancelledError:
-                pass
-        try:
+        with contextlib.suppress(Exception):
             state.session.complete()
-        except Exception:
-            pass
         _log.info("replay_stopped", session_id=sid)
 
     async def seek(self, session_id: str | UUID, timestamp: datetime) -> None:
@@ -169,10 +166,8 @@ class ReplayEngine:
         was_paused = state.session.status == ReplayStatus.PAUSED
         if state.task is not None and not state.task.done():
             state.task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await state.task
-            except asyncio.CancelledError:
-                pass
 
         state._cursor_ts = timestamp
         # Restart from the seek point — keep original end & speed.
@@ -261,10 +256,8 @@ class ReplayEngine:
             raise
         except Exception:
             _log.exception("replay_failed", session_id=sid)
-            try:
+            with contextlib.suppress(Exception):
                 state.session.complete()
-            except Exception:
-                pass
 
     @staticmethod
     async def _fetch_batch(

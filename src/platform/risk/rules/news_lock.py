@@ -116,8 +116,8 @@ class NewsLockRule(RiskRule):
         """
         now = datetime.now(UTC)
         currency = symbol_to_currency(ctx.symbol)
-        window_start = now - self.blackout_before
-        window_end = now + self.blackout_after
+        now - self.blackout_before
+        now + self.blackout_after
 
         for ev_ts, ev_ccy, ev_impact, ev_desc in self._events:
             if ev_ccy != currency:

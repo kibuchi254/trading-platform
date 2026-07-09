@@ -52,16 +52,16 @@ from platform.infrastructure.execution.registry import (
 )
 
 __all__ = [
+    "AccountSnapshot",
+    "BridgeClientAdapter",
     # Core abstractions (from adapter_base)
     "ExecutionAdapter",
-    "OrderRequest",
-    "ExecutionReport",
-    "PositionSnapshot",
-    "AccountSnapshot",
-    # Built-in adapters
-    "PaperBrokerAdapter",
-    "BridgeClientAdapter",
     # Registry
     "ExecutionAdapterRegistry",
+    "ExecutionReport",
+    "OrderRequest",
+    # Built-in adapters
+    "PaperBrokerAdapter",
+    "PositionSnapshot",
     "get_adapter_registry",
 ]

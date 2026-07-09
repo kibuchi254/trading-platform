@@ -1554,7 +1554,7 @@ def reconcile_orders(self: Task, terminal_id: str) -> dict[str, Any]:
 
 
 async def _reconcile_orders_async(terminal_id: str) -> dict[str, Any]:
-    bridge = get_bridge_client()
+    get_bridge_client()
 
     # Try SYNC_ORDERS via the bridge. The bridge client doesn't expose a
     # dedicated method, so we craft the command directly through the
@@ -1635,7 +1635,7 @@ async def _reconcile_orders_async(terminal_id: str) -> dict[str, Any]:
                     )
 
         # DB orders not reported by terminal.
-        for broker_id, o in db_by_broker.items():
+        for broker_id, _o in db_by_broker.items():
             if broker_id not in remote_ids:
                 missing_in_terminal.append(broker_id)
 
@@ -2020,25 +2020,25 @@ async def _fanout_user_jobs(task_name: str) -> dict[str, Any]:
 
 
 __all__ = [
-    "persist_tick",
-    "persist_execution",
-    "persist_position_update",
-    "persist_account_update",
-    "run_backtest",
-    "send_notification",
-    "sync_terminal_positions",
-    "sync_terminal_account",
-    "cleanup_expired_signals",
     "archive_old_ticks",
-    "compute_performance_metrics",
     "check_risk_thresholds",
-    "reconcile_orders",
-    "flush_tick_buffer",
-    "send_daily_report",
-    # Fan-out helpers (scheduled by Beat)
-    "fanout_sync_terminal_positions",
-    "fanout_reconcile_orders",
+    "cleanup_expired_signals",
+    "compute_performance_metrics",
     "fanout_check_risk_thresholds",
     "fanout_compute_performance_metrics",
+    "fanout_reconcile_orders",
     "fanout_send_daily_report",
+    # Fan-out helpers (scheduled by Beat)
+    "fanout_sync_terminal_positions",
+    "flush_tick_buffer",
+    "persist_account_update",
+    "persist_execution",
+    "persist_position_update",
+    "persist_tick",
+    "reconcile_orders",
+    "run_backtest",
+    "send_daily_report",
+    "send_notification",
+    "sync_terminal_account",
+    "sync_terminal_positions",
 ]

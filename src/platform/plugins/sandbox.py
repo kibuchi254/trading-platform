@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import ast
 import asyncio
+import contextlib
 from platform.core.logging import get_logger
 from typing import Any
 
@@ -281,7 +282,7 @@ class StrategySandbox:
         try:
             from platform.strategies.sdk import Strategy  # noqa: F401
 
-            sdk_module = __import__("platform.strategies.sdk", fromlist=["*"])
+            __import__("platform.strategies.sdk", fromlist=["*"])
         except Exception:
             _log.exception("strategy_sdk_import_failed")
             return None
@@ -294,14 +295,10 @@ class StrategySandbox:
             # __name__ and __module__ are required by Python's class machinery.
             "__name__": f"sandbox:{name}",
         }
-        try:
+        with contextlib.suppress(ImportError):
             namespace["numpy"] = __import__("numpy")
-        except ImportError:
-            pass
-        try:
+        with contextlib.suppress(ImportError):
             namespace["pandas"] = __import__("pandas")
-        except ImportError:
-            pass
         namespace["math"] = __import__("math")
         namespace["statistics"] = __import__("statistics")
         namespace["datetime"] = __import__("datetime")

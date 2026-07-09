@@ -266,7 +266,7 @@ class BacktestEngine:
 
         # Close all open positions at the last close
         positions = await broker.sync_positions()
-        last_price = bars[-1].close
+        bars[-1].close
         for pos in positions:
             try:
                 await broker.close_position(pos.broker_position_id)
@@ -274,8 +274,8 @@ class BacktestEngine:
                 _log.exception("backtest_close_failed", position_id=pos.broker_position_id)
 
         # Collect trades
-        for pos_id, pos_snap in broker._positions.items():
-            if pos_snap.realized_pnl != 0 or True:  # capture all
+        for _pos_id, pos_snap in broker._positions.items():
+            if True:  # capture all
                 trades.append(
                     {
                         "symbol": pos_snap.symbol,
@@ -295,7 +295,7 @@ class BacktestEngine:
 
         # Compute metrics
         final_equity = equity_snapshots[-1][1] if equity_snapshots else config.initial_capital
-        curve = compute_equity_curve(trades, config.initial_capital)
+        compute_equity_curve(trades, config.initial_capital)
         # Use equity_snapshots directly for drawdown
         max_dd = compute_max_drawdown(equity_snapshots)
         returns = compute_returns(equity_snapshots)

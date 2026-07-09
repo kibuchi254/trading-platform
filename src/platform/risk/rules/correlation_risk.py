@@ -35,7 +35,7 @@ def correlation(series_a: list[float], series_b: list[float]) -> float:
     b = series_b[:n]
     mean_a = sum(a) / n
     mean_b = sum(b) / n
-    cov = sum((x - mean_a) * (y - mean_b) for x, y in zip(a, b))
+    cov = sum((x - mean_a) * (y - mean_b) for x, y in zip(a, b, strict=False))
     var_a = sum((x - mean_a) ** 2 for x in a)
     var_b = sum((y - mean_b) ** 2 for y in b)
     denom = math.sqrt(var_a * var_b)

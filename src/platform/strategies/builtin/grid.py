@@ -96,7 +96,6 @@ class GridStrategy(Strategy):
         if last is None or band == last:
             return None
 
-        price = bar.close
         # Crossed upward through one or more levels — emit SELL at each fresh level
         if band > last:
             for k in range(last + 1, band + 1):

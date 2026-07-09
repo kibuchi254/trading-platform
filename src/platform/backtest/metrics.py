@@ -162,7 +162,7 @@ def compute_calibration(y_pred: list[str], y_true: list[str]) -> float:
     """Classification accuracy for AI predictions."""
     if not y_pred or len(y_pred) != len(y_true):
         return 0.0
-    correct = sum(1 for p, t in zip(y_pred, y_true) if p == t)
+    correct = sum(1 for p, t in zip(y_pred, y_true, strict=False) if p == t)
     return correct / len(y_pred)
 
 

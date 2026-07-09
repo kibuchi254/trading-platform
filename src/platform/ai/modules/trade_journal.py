@@ -21,7 +21,7 @@ def build_prompt(trade: dict[str, Any]) -> str:
     return (
         "Journal the following closed trade as a reflective trading log entry. "
         "Identify the key decision, what went well, what to improve, and assign "
-        "a letter grade (A–F). Be concise (≤ 200 words).\n\n"
+        "a letter grade (A-F). Be concise (≤ 200 words).\n\n"
         f"Trade: {json.dumps(trade, default=str)}"
     )
 

@@ -31,7 +31,7 @@ PROTOCOL_VERSION = 1
 
 # ── Direction markers ────────────────────────────────────────────────────────
 # Server → Terminal
-class CommandType(str, enum.Enum):
+class CommandType(enum.StrEnum):
     PING = "cmd.ping"
     PLACE_ORDER = "cmd.order.place"
     MODIFY_ORDER = "cmd.order.modify"
@@ -50,7 +50,7 @@ class CommandType(str, enum.Enum):
 
 
 # Terminal → Server
-class EventType(str, enum.Enum):
+class EventType(enum.StrEnum):
     REGISTER = "evt.register"
     HEARTBEAT = "evt.heartbeat"
     TICK = "evt.tick"

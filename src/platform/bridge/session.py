@@ -9,6 +9,7 @@ Wraps the raw WebSocket connection and provides:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import uuid
 from platform.core.logging import get_logger
 from platform.infrastructure.mt5_bridge.protocol import BridgeMessage
@@ -48,10 +49,8 @@ class BridgeSession:
         if self._closed:
             return
         self._closed = True
-        try:
+        with contextlib.suppress(Exception):
             await self.ws.close(code=code, reason=reason)
-        except Exception:
-            pass
         _log.info(
             "session_closed",
             session_id=self.id,

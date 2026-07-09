@@ -55,9 +55,9 @@ def macd(
     """Return (macd_line, signal_line, histogram) series aligned with prices."""
     ema_fast = ema(prices, fast)
     ema_slow = ema(prices, slow)
-    macd_line = [f - s for f, s in zip(ema_fast, ema_slow)]
+    macd_line = [f - s for f, s in zip(ema_fast, ema_slow, strict=False)]
     signal_line = ema(macd_line, signal)
-    histogram = [m - s for m, s in zip(macd_line, signal_line)]
+    histogram = [m - s for m, s in zip(macd_line, signal_line, strict=False)]
     return macd_line, signal_line, histogram
 
 
