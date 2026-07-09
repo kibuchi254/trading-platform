@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import os
-import sys
-from pathlib import Path
 
 # Make `platform` importable without shadowing standard library platform module
 import platform
+import sys
+from pathlib import Path
+
 ROOT = Path(__file__).resolve().parent.parent
 platform_path = ROOT / "src" / "platform"
 if not hasattr(platform, "__path__"):
