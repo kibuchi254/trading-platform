@@ -46,7 +46,7 @@ jobs:
     # Settings → Environments → production → Required reviewers
     environment:
       name: production
-      url: ${{ secrets.PRODUCTION_URL }}
+      url: ${{ vars.PRODUCTION_URL }}
 
     steps:
       - uses: actions/checkout@v4
@@ -189,5 +189,5 @@ jobs:
           echo "|---|---|" >> $GITHUB_STEP_SUMMARY
           echo "| **Image tag** | \`${{ steps.tag.outputs.tag }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| **Server** | \`${{ secrets.SSH_HOST }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| **URL** | ${{ secrets.PRODUCTION_URL }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **URL** | ${{ vars.PRODUCTION_URL }} |" >> $GITHUB_STEP_SUMMARY
           echo "| **Deployed at** | $(date -u) |" >> $GITHUB_STEP_SUMMARY
