@@ -1,0 +1,248 @@
+name: PR Checks
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+# Read-only by default; specific jobs get write permissions as needed
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+# Cancel outdated runs for the same PR
+concurrency:
+  group: pr-checks-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  # ─── Auto Label ──────────────────────────────────────────────────────────────
+  auto-label:
+    name: Auto Label PR
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/labeler@v5
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          configuration-path: .github/labeler.yml
+          sync-labels: true
+
+  # ─── PR Size Check ───────────────────────────────────────────────────────────
+  size-check:
+    name: PR Size Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Comment on oversized PRs
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number
+            });
+
+            const { additions, deletions } = pr;
+            const total = additions + deletions;
+
+            console.log(`PR #${pr.number}: +${additions} -${deletions} (${total} total)`);
+
+            // Look for a pre-existing size warning comment to avoid duplicates
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number
+            });
+            const existing = comments.find(c =>
+              c.user.login === 'github-actions[bot]' &&
+              c.body.includes('PR Size')
+            );
+
+            let body = null;
+            if (total > 1000) {
+              body = `## ⚠️ PR Size Warning\n\nThis PR touches **${total} lines** (+${additions}/-${deletions}).\n\nVery large PRs are risky in a trading system — they're harder to review, more likely to introduce bugs, and harder to roll back. Please consider breaking this into smaller focused PRs if possible.`;
+            } else if (total > 500) {
+              body = `## 📏 PR Size Notice\n\nThis PR touches **${total} lines** (+${additions}/-${deletions}). Consider splitting if there are independent changes.`;
+            }
+
+            if (body) {
+              if (existing) {
+                await github.rest.issues.updateComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  comment_id: existing.id,
+                  body
+                });
+              } else {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.issue.number,
+                  body
+                });
+              }
+            }
+
+  # ─── Migration Safety Guard ──────────────────────────────────────────────────
+  migration-guard:
+    name: Migration Safety Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check migration + test pairing
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: files } = await github.rest.pulls.listFiles({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+              per_page: 100
+            });
+
+            const filenames = files.map(f => f.filename);
+
+            const hasMigration = filenames.some(f => f.startsWith('alembic/versions/'));
+            const hasRiskChange = filenames.some(f => f.startsWith('src/platform/risk/'));
+            const hasTests = filenames.some(f => f.startsWith('tests/'));
+            const hasStrategyChange = filenames.some(f => f.startsWith('src/platform/strategies/'));
+
+            let warnings = [];
+
+            // Migration without tests
+            if (hasMigration && !hasTests) {
+              warnings.push('🚨 **Migration without tests**: An Alembic migration was added but no test files were changed. Please add tests covering any model/schema changes.');
+              core.setFailed('Migration detected without corresponding test changes.');
+            }
+
+            // Risk module change without tests
+            if (hasRiskChange && !hasTests) {
+              warnings.push('🚨 **Risk module change without tests**: Changes to `src/platform/risk/` require test coverage. Risk management logic is critical.');
+              core.setFailed('Risk module changes require tests.');
+            }
+
+            // Strategy change without tests
+            if (hasStrategyChange && !hasTests) {
+              warnings.push('⚠️ **Strategy change without tests**: Changes to `src/platform/strategies/` should have corresponding test coverage.');
+            }
+
+            if (warnings.length > 0) {
+              const body = `## ⚠️ Safety Check Issues\n\n${warnings.join('\n\n')}`;
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body
+              });
+            }
+
+            // Label PRs that include migrations
+            if (hasMigration) {
+              try {
+                await github.rest.issues.addLabels({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.issue.number,
+                  labels: ['db-migration']
+                });
+              } catch (e) {
+                console.log('Could not add db-migration label (may not exist yet):', e.message);
+              }
+            }
+
+            if (hasRiskChange) {
+              try {
+                await github.rest.issues.addLabels({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.issue.number,
+                  labels: ['risk-critical']
+                });
+              } catch (e) {
+                console.log('Could not add risk-critical label:', e.message);
+              }
+            }
+
+  # ─── Dependency Change Summary ───────────────────────────────────────────────
+  dependency-diff:
+    name: Dependency Change Summary
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Summarise dependency changes
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: files } = await github.rest.pulls.listFiles({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+              per_page: 100
+            });
+
+            const pyprojectFile = files.find(f => f.filename === 'pyproject.toml');
+            if (!pyprojectFile || !pyprojectFile.patch) {
+              console.log('No pyproject.toml changes detected.');
+              return;
+            }
+
+            const patch = pyprojectFile.patch;
+            const added = patch.split('\n')
+              .filter(l => l.startsWith('+') && !l.startsWith('+++') && l.includes('"'))
+              .map(l => l.substring(1).trim())
+              .filter(l => l.length > 0 && !l.startsWith('#'));
+
+            const removed = patch.split('\n')
+              .filter(l => l.startsWith('-') && !l.startsWith('---') && l.includes('"'))
+              .map(l => l.substring(1).trim())
+              .filter(l => l.length > 0 && !l.startsWith('#'));
+
+            if (added.length === 0 && removed.length === 0) {
+              console.log('pyproject.toml changed but no dependency lines detected.');
+              return;
+            }
+
+            let body = '## 📦 Dependency Changes\n\n';
+            if (added.length > 0) {
+              body += `**Added / Updated (${added.length}):**\n`;
+              body += added.map(d => `- \`${d}\``).join('\n') + '\n\n';
+            }
+            if (removed.length > 0) {
+              body += `**Removed (${removed.length}):**\n`;
+              body += removed.map(d => `- \`${d}\``).join('\n') + '\n\n';
+            }
+            body += '_Please verify new dependencies for security (check CVEs) and license compatibility before merging._';
+
+            // Update existing comment if present, else create
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number
+            });
+            const existing = comments.find(c =>
+              c.user.login === 'github-actions[bot]' &&
+              c.body.includes('Dependency Changes')
+            );
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body
+              });
+            }

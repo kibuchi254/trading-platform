@@ -20,7 +20,9 @@ spec:
       terminationGracePeriodSeconds: 60  # allow pending commands to drain
       containers:
         - name: bridge
-          image: ghcr.io/atlas/atlas-api:latest
+          # Image tag is substituted by CI/CD (cd.yml) via sed before apply.
+          # Bridge uses the same image as API — only the CMD differs (overridden below).
+          image: ghcr.io/__REGISTRY__/atlas-api:__IMAGE_TAG__
           command: ["python", "-m", "platform.bridge.server", "--host", "0.0.0.0", "--port", "9000"]
           ports:
             - name: ws

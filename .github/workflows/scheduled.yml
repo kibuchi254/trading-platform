@@ -1,0 +1,296 @@
+name: Scheduled — Security & Maintenance
+
+# Three independent cron schedules, differentiated via github.event.schedule:
+#   - Daily 02:00 UTC  → security-scan
+#   - Weekly Sun 00:00 → dependency-update PR
+#   - Every 6 hours    → staging health ping
+
+on:
+  schedule:
+    - cron: "0 2 * * *"   # Daily security scan
+    - cron: "0 0 * * 0"   # Weekly dependency update
+    - cron: "0 */6 * * *" # Staging health ping
+  workflow_dispatch:
+    inputs:
+      job:
+        description: "Which maintenance job to run"
+        required: true
+        type: choice
+        options:
+          - security-scan
+          - dependency-update
+          - health-ping
+
+env:
+  PYTHON_VERSION: "3.13"
+
+# ─── Daily Security Scan ──────────────────────────────────────────────────────
+jobs:
+  security-scan:
+    name: Security Scan (pip-audit + bandit)
+    runs-on: ubuntu-latest
+    if: |
+      (github.event_name == 'schedule' && github.event.schedule == '0 2 * * *') ||
+      (github.event_name == 'workflow_dispatch' && inputs.job == 'security-scan')
+    permissions:
+      issues: write
+      security-events: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+          cache-dependency-glob: "pyproject.toml"
+
+      - run: uv python install ${{ env.PYTHON_VERSION }}
+      - run: uv venv --python ${{ env.PYTHON_VERSION }}
+      - run: uv pip install -e ".[dev]"
+
+      - name: Run pip-audit (dependency CVEs)
+        id: pip-audit
+        run: |
+          uv run pip-audit --strict --format json -o pip-audit-report.json
+          echo "status=clean" >> $GITHUB_OUTPUT
+        continue-on-error: true
+
+      - name: Set pip-audit status
+        if: steps.pip-audit.outcome == 'failure'
+        run: echo "PIP_AUDIT_FAILED=true" >> $GITHUB_ENV
+
+      - name: Run bandit (code security)
+        id: bandit
+        run: |
+          uv run bandit -r src/platform/ -ll -f sarif -o bandit-report.sarif
+          echo "status=clean" >> $GITHUB_OUTPUT
+        continue-on-error: true
+
+      - name: Set bandit status
+        if: steps.bandit.outcome == 'failure'
+        run: echo "BANDIT_FAILED=true" >> $GITHUB_ENV
+
+      - name: Upload SARIF to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: bandit-report.sarif
+        continue-on-error: true
+
+      - name: Create GitHub Issue on findings
+        if: env.PIP_AUDIT_FAILED == 'true' || env.BANDIT_FAILED == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const today = new Date().toISOString().split('T')[0];
+            const title = `🔒 Security Alert — ${today}`;
+
+            // Avoid duplicate issues for the same day
+            const { data: openIssues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'security,automated'
+            });
+            const duplicate = openIssues.find(i => i.title === title);
+            if (duplicate) {
+              console.log(`Issue "${title}" already exists (#${duplicate.number}), skipping.`);
+              return;
+            }
+
+            const findings = [];
+            if (process.env.PIP_AUDIT_FAILED === 'true') {
+              findings.push('- ⚠️ **pip-audit**: Vulnerable dependencies detected');
+            }
+            if (process.env.BANDIT_FAILED === 'true') {
+              findings.push('- ⚠️ **bandit**: Code security issues detected');
+            }
+
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title,
+              body: [
+                '## 🔒 Security Scan Alert',
+                '',
+                'The daily automated security scan detected issues:',
+                '',
+                ...findings,
+                '',
+                `**Workflow run:** ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+                '',
+                '**Action required:** Review and remediate before the next deployment.',
+                '',
+                '---',
+                '_This issue was created automatically by the scheduled security scan._'
+              ].join('\n'),
+              labels: ['security', 'automated']
+            });
+
+      - name: Scan summary
+        if: always()
+        run: |
+          echo "### 🔒 Security Scan Results" >> $GITHUB_STEP_SUMMARY
+          if [ "$PIP_AUDIT_FAILED" = "true" ]; then
+            echo "- ❌ pip-audit: **FAILED** — vulnerable dependencies found" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- ✅ pip-audit: clean" >> $GITHUB_STEP_SUMMARY
+          fi
+          if [ "$BANDIT_FAILED" = "true" ]; then
+            echo "- ❌ bandit: **FAILED** — code security issues found" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- ✅ bandit: clean" >> $GITHUB_STEP_SUMMARY
+          fi
+
+  # ─── Weekly Dependency Update PR ─────────────────────────────────────────────
+  dependency-update:
+    name: Weekly Dependency Update PR
+    runs-on: ubuntu-latest
+    if: |
+      (github.event_name == 'schedule' && github.event.schedule == '0 0 * * 0') ||
+      (github.event_name == 'workflow_dispatch' && inputs.job == 'dependency-update')
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: astral-sh/setup-uv@v3
+
+      - run: uv python install ${{ env.PYTHON_VERSION }}
+
+      - name: Upgrade lockfile
+        run: uv lock --upgrade
+
+      - name: Check if lockfile changed
+        id: changes
+        run: |
+          if git diff --quiet; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+            echo "No lockfile changes — all dependencies are already up to date."
+          else
+            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "Dependency changes detected:"
+            git diff --stat
+          fi
+
+      - name: Create dependency update PR
+        if: steps.changes.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "chore(deps): weekly dependency lockfile update"
+          author: "github-actions[bot] <github-actions[bot]@users.noreply.github.com>"
+          title: "chore(deps): Weekly Dependency Update"
+          body: |
+            ## 📦 Automated Weekly Dependency Update
+
+            This PR was created by the weekly scheduled maintenance workflow.
+
+            **What changed:**
+            - `uv.lock` updated to latest compatible versions of all dependencies
+
+            **Review checklist before merging:**
+            - [ ] Check CI passes (lint, typecheck, tests)
+            - [ ] Review diff for unexpected major version bumps
+            - [ ] Verify no breaking changes in AI/ML libraries (XGBoost, ONNX, sklearn)
+            - [ ] Verify no breaking changes in FastAPI, SQLAlchemy, or Celery
+
+            ---
+            _This PR was created automatically. Merge when CI is green and the diff looks safe._
+          branch: chore/weekly-dep-update
+          delete-branch: true
+          labels: |
+            dependencies
+            automated
+
+      - name: No update needed
+        if: steps.changes.outputs.changed == 'false'
+        run: echo "All dependencies are up to date — no PR created." >> $GITHUB_STEP_SUMMARY
+
+  # ─── Staging Health Ping ──────────────────────────────────────────────────────
+  health-ping:
+    name: Production Health Ping
+    runs-on: ubuntu-latest
+    if: |
+      (github.event_name == 'schedule' && github.event.schedule == '0 */6 * * *') ||
+      (github.event_name == 'workflow_dispatch' && inputs.job == 'health-ping')
+    permissions:
+      issues: write
+    steps:
+      - name: Ping liveness endpoint
+        id: live
+        run: |
+          STATUS=$(curl -sf -o /dev/null -w "%{http_code}" \
+            --max-time 15 \
+            "${{ secrets.HEALTH_URL }}" || echo "000")
+          echo "status=${STATUS}" >> $GITHUB_OUTPUT
+          echo "Liveness check: HTTP ${STATUS}"
+
+      - name: Ping readiness endpoint
+        id: ready
+        run: |
+          READY_URL="${{ secrets.HEALTH_URL }}"
+          # Swap /live for /ready if using standard health route pattern
+          READY_URL="${READY_URL/\/live/\/ready}"
+          STATUS=$(curl -sf -o /dev/null -w "%{http_code}" \
+            --max-time 15 \
+            "${READY_URL}" || echo "000")
+          echo "status=${STATUS}" >> $GITHUB_OUTPUT
+          echo "Readiness check: HTTP ${STATUS}"
+
+      - name: Health summary
+        run: |
+          echo "### 💓 Production Health Check" >> $GITHUB_STEP_SUMMARY
+          LIVE="${{ steps.live.outputs.status }}"
+          READY="${{ steps.ready.outputs.status }}"
+          if [ "${LIVE}" = "200" ]; then
+            echo "- ✅ Liveness: HTTP ${LIVE}" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- ❌ Liveness: HTTP ${LIVE}" >> $GITHUB_STEP_SUMMARY
+          fi
+          if [ "${READY}" = "200" ]; then
+            echo "- ✅ Readiness: HTTP ${READY}" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- ❌ Readiness: HTTP ${READY}" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Open incident issue on failure
+        if: steps.live.outputs.status != '200' || steps.ready.outputs.status != '200'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const now = new Date().toISOString();
+            const liveStatus = '${{ steps.live.outputs.status }}';
+            const readyStatus = '${{ steps.ready.outputs.status }}';
+
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `🚨 Production Outage Detected — ${now}`,
+              body: [
+                '## 🚨 Production Health Check Failed',
+                '',
+                `**Detected at:** ${now}`,
+                `**Liveness:** HTTP ${liveStatus} (expected 200)`,
+                `**Readiness:** HTTP ${readyStatus} (expected 200)`,
+                '',
+                `**Health URL:** \`${{ secrets.HEALTH_URL }}\``,
+                '',
+                '**Immediate actions:**',
+                '1. SSH to server: `ssh -p $SSH_PORT $SSH_USER@$SSH_HOST`',
+                '2. Check status: `docker compose -f /opt/atlas/deploy/server/docker-compose.prod.yml ps`',
+                '3. Check logs: `docker compose -f /opt/atlas/deploy/server/docker-compose.prod.yml logs api --tail=100`',
+                '4. Restart: `docker compose -f /opt/atlas/deploy/server/docker-compose.prod.yml restart api`',
+                '',
+                `**Workflow run:** ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+                '',
+                '---',
+                '_This issue was created automatically by the health monitoring workflow._'
+              ].join('\n'),
+              labels: ['incident', 'production', 'automated']
+            });
+
+            core.setFailed(`Production health check failed — liveness: ${liveStatus}, readiness: ${readyStatus}`);

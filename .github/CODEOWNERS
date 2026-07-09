@@ -1,0 +1,43 @@
+# ATLAS — CODEOWNERS
+# Automatically requests reviews from the right team when PRs touch these paths.
+# Docs: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+#
+# NOTE: Replace @atlas-team/* with your actual GitHub team or username handles.
+
+# ─── Global Fallback ──────────────────────────────────────────────────────────
+# Any file not matched below requires a backend team review
+*                                       @atlas-team/backend
+
+# ─── AI / ML Modules ──────────────────────────────────────────────────────────
+src/platform/ai/                        @atlas-team/ml
+
+# ─── API Layer ────────────────────────────────────────────────────────────────
+src/platform/api/                       @atlas-team/backend
+
+# ─── Risk Management (CRITICAL — requires quant review) ───────────────────────
+src/platform/risk/                      @atlas-team/backend @atlas-team/quant
+
+# ─── Trading Strategies (CRITICAL) ────────────────────────────────────────────
+src/platform/strategies/                @atlas-team/backend @atlas-team/quant
+
+# ─── Market Data ──────────────────────────────────────────────────────────────
+src/platform/market_data/               @atlas-team/backend
+
+# ─── MT5 Bridge ───────────────────────────────────────────────────────────────
+src/platform/bridge/                    @atlas-team/backend
+mql5/                                   @atlas-team/backend
+
+# ─── Infrastructure & Deployment (CRITICAL) ───────────────────────────────────
+deploy/                                 @atlas-team/infra
+docker/                                 @atlas-team/infra
+monitoring/                             @atlas-team/infra
+
+# ─── Database Migrations (CRITICAL — backend + infra review) ──────────────────
+alembic/                                @atlas-team/backend @atlas-team/infra
+src/platform/db/                        @atlas-team/backend @atlas-team/infra
+
+# ─── CI/CD Workflows ──────────────────────────────────────────────────────────
+.github/workflows/                      @atlas-team/infra
+
+# ─── Project Config ───────────────────────────────────────────────────────────
+pyproject.toml                          @atlas-team/backend @atlas-team/infra

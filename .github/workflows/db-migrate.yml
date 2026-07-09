@@ -1,0 +1,109 @@
+name: DB — Alembic Migration
+
+# Runs Alembic migrations on the production server via SSH.
+# The migration runs inside the already-running 'api' Docker container.
+#
+# ALWAYS run dry_run=true first to preview what will change — then re-run with false.
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run (alembic check only — no changes applied)"
+        required: false
+        type: boolean
+        default: true
+      revision:
+        description: "Target revision (default: head)"
+        required: false
+        type: string
+        default: "head"
+
+env:
+  DEPLOY_DIR: /opt/atlas
+
+jobs:
+  migrate:
+    name: "${{ inputs.dry_run == true && '🔍 Dry Run —' || '⚡ Migrate —' }} alembic ${{ inputs.dry_run == true && 'check' || format('upgrade {0}', inputs.revision) }}"
+    runs-on: ubuntu-latest
+    environment: production   # Requires approval gate if configured
+
+    steps:
+      - name: Print plan
+        run: |
+          echo "### 🗄️ Migration" >> $GITHUB_STEP_SUMMARY
+          echo "| | |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Mode** | ${{ inputs.dry_run == true && 'Dry run (no changes)' || 'Live migration' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Revision** | \`${{ inputs.revision }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Server** | \`${{ secrets.SSH_HOST }}\` |" >> $GITHUB_STEP_SUMMARY
+
+      # ─── DRY RUN ───────────────────────────────────────────────────────────
+      - name: "[Dry Run] Show migration state"
+        if: inputs.dry_run == true
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT }}
+          script: |
+            set -euo pipefail
+            COMPOSE="docker compose -f ${{ env.DEPLOY_DIR }}/deploy/server/docker-compose.prod.yml"
+
+            echo "═══ Current revision ═══"
+            $COMPOSE exec -T api uv run alembic current
+
+            echo ""
+            echo "═══ Pending check ═══"
+            $COMPOSE exec -T api uv run alembic check \
+              && echo "✅ Database is up to date — no migration needed." \
+              || echo "⚠  Migrations pending. Re-run with dry_run=false to apply."
+
+            echo ""
+            echo "═══ History (last 10) ═══"
+            $COMPOSE exec -T api uv run alembic history --verbose | tail -20
+
+      # ─── LIVE MIGRATION ────────────────────────────────────────────────────
+      - name: "[Live] Apply: alembic upgrade ${{ inputs.revision }}"
+        if: inputs.dry_run == false
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT }}
+          script: |
+            set -euo pipefail
+            COMPOSE="docker compose -f ${{ env.DEPLOY_DIR }}/deploy/server/docker-compose.prod.yml"
+
+            echo "═══ State BEFORE ═══"
+            $COMPOSE exec -T api uv run alembic current
+
+            echo ""
+            echo "═══ Applying: alembic upgrade ${{ inputs.revision }} ═══"
+            $COMPOSE exec -T api uv run alembic upgrade "${{ inputs.revision }}"
+
+            echo ""
+            echo "═══ State AFTER ═══"
+            $COMPOSE exec -T api uv run alembic current
+            echo "✅ Migration complete"
+
+      - name: Result
+        if: always()
+        run: |
+          if [ "${{ job.status }}" = "success" ]; then
+            if [ "${{ inputs.dry_run }}" = "true" ]; then
+              echo "✅ Dry run complete — no changes applied." >> $GITHUB_STEP_SUMMARY
+              echo "Re-run with **dry_run = false** to apply." >> $GITHUB_STEP_SUMMARY
+            else
+              echo "✅ Migration applied at $(date -u)" >> $GITHUB_STEP_SUMMARY
+            fi
+          else
+            echo "❌ Migration failed. Recovery commands:" >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+            echo "ssh -p \$SSH_PORT \$SSH_USER@\$SSH_HOST" >> $GITHUB_STEP_SUMMARY
+            echo "docker compose -f /opt/atlas/deploy/server/docker-compose.prod.yml exec api uv run alembic current" >> $GITHUB_STEP_SUMMARY
+            echo "docker compose -f /opt/atlas/deploy/server/docker-compose.prod.yml exec api uv run alembic downgrade -1" >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          fi

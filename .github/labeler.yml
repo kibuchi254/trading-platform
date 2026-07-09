@@ -1,0 +1,69 @@
+# GitHub PR Auto-Labeler Configuration
+# Used by pr-checks.yml → actions/labeler@v5
+# Docs: https://github.com/actions/labeler
+
+ai:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "src/platform/ai/**"
+
+api:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "src/platform/api/**"
+
+risk:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "src/platform/risk/**"
+
+strategies:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "src/platform/strategies/**"
+
+market-data:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "src/platform/market_data/**"
+
+bridge:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "src/platform/bridge/**"
+
+infrastructure:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "deploy/**"
+          - "docker/**"
+          - "monitoring/**"
+          - ".github/workflows/**"
+
+database:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "alembic/**"
+          - "src/platform/db/**"
+
+dependencies:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "pyproject.toml"
+
+tests:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "tests/**"
+
+documentation:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "docs/**"
+          - "*.md"
+          - "CONTRIBUTING.md"
+
+mql5:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "mql5/**"

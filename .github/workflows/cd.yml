@@ -1,0 +1,193 @@
+name: CD — Deploy to Production
+
+# ─── Required GitHub Secrets (Settings → Secrets → Actions) ─────────────────
+#   SSH_HOST          — Server IP or hostname
+#   SSH_USER          — SSH username (e.g. deploy)
+#   SSH_PRIVATE_KEY   — Private SSH key content
+#   SSH_PORT          — Custom SSH port (e.g. 2847)
+#   GHCR_TOKEN        — GitHub PAT with read:packages scope
+#   PRODUCTION_URL    — e.g. https://api.atlas.example.com
+#   HEALTH_URL        — e.g. https://api.atlas.example.com/health/live
+#
+# One-time setup: run deploy/server/setup.sh as root on your server.
+# After that, all deploys happen automatically — no manual SSH needed.
+
+on:
+  # Auto-deploy after CI passes on main
+  workflow_run:
+    workflows: ["CI"]
+    branches: [main]
+    types: [completed]
+
+  # Manual deploy — lets you pick an exact image tag or redeploy current
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Image tag to deploy (leave blank to use latest main SHA)"
+        required: false
+        type: string
+
+env:
+  REGISTRY: ghcr.io
+  DEPLOY_DIR: /opt/atlas
+
+jobs:
+  deploy:
+    name: Deploy → Production
+    runs-on: ubuntu-latest
+
+    # Only run if triggered manually, OR if the CI workflow that triggered us passed
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'success')
+
+    # GitHub Environment — add required reviewers here for an approval gate:
+    # Settings → Environments → production → Required reviewers
+    environment:
+      name: production
+      url: ${{ secrets.PRODUCTION_URL }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Resolve image tag
+        id: tag
+        run: |
+          if [ -n "${{ inputs.image_tag }}" ]; then
+            # Manual dispatch with explicit tag
+            TAG="${{ inputs.image_tag }}"
+          elif [ "${{ github.event_name }}" = "workflow_run" ]; then
+            # Auto-deploy: use the SHA of the commit that triggered CI
+            SHA="${{ github.event.workflow_run.head_sha }}"
+            TAG="sha-${SHA:0:7}"
+          else
+            # Fallback for manual dispatch without tag
+            TAG="sha-${GITHUB_SHA:0:7}"
+          fi
+          IMAGE="${{ env.REGISTRY }}/${{ github.repository }}/atlas-api:${TAG}"
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "image=${IMAGE}" >> $GITHUB_OUTPUT
+          echo "Deploying: ${IMAGE}"
+
+      - name: Copy compose file and configs to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT }}
+          source: "deploy/server/docker-compose.prod.yml,monitoring/prometheus.yml"
+          target: ${{ env.DEPLOY_DIR }}
+          strip_components: 0
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT }}
+          # Secrets injected as env vars — never written to logs
+          envs: GHCR_TOKEN,IMAGE_TAG,REGISTRY,GITHUB_REPOSITORY
+          script: |
+            set -euo pipefail
+            cd "${{ env.DEPLOY_DIR }}"
+
+            echo "▶ Logging in to GHCR..."
+            echo "${GHCR_TOKEN}" | docker login ghcr.io \
+              -u "${{ github.actor }}" --password-stdin
+
+            echo "▶ Pulling image: ${REGISTRY}/${GITHUB_REPOSITORY}/atlas-api:${IMAGE_TAG}"
+            docker pull "${REGISTRY}/${GITHUB_REPOSITORY}/atlas-api:${IMAGE_TAG}"
+
+            echo "▶ Pinning IMAGE_TAG in .env..."
+            if grep -q '^IMAGE_TAG=' .env 2>/dev/null; then
+              sed -i "s|^IMAGE_TAG=.*|IMAGE_TAG=${IMAGE_TAG}|" .env
+            else
+              echo "IMAGE_TAG=${IMAGE_TAG}" >> .env
+            fi
+
+            echo "▶ Updating REGISTRY and GITHUB_REPOSITORY in .env..."
+            for VAR in REGISTRY GITHUB_REPOSITORY; do
+              if grep -q "^${VAR}=" .env 2>/dev/null; then
+                sed -i "s|^${VAR}=.*|${VAR}=${!VAR}|" .env
+              else
+                echo "${VAR}=${!VAR}" >> .env
+              fi
+            done
+
+            echo "▶ Rolling update — api first..."
+            docker compose \
+              -f "${{ env.DEPLOY_DIR }}/deploy/server/docker-compose.prod.yml" \
+              up -d --no-deps --remove-orphans api
+
+            echo "▶ Waiting 20s for API to stabilise..."
+            sleep 20
+
+            echo "▶ Rolling update — bridge and worker..."
+            docker compose \
+              -f "${{ env.DEPLOY_DIR }}/deploy/server/docker-compose.prod.yml" \
+              up -d --no-deps bridge worker
+
+            echo "▶ Final container status:"
+            docker compose \
+              -f "${{ env.DEPLOY_DIR }}/deploy/server/docker-compose.prod.yml" \
+              ps
+
+            echo "▶ Done: ${IMAGE_TAG}"
+        env:
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+          IMAGE_TAG: ${{ steps.tag.outputs.tag }}
+          REGISTRY: ${{ env.REGISTRY }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+
+      - name: Health check
+        run: |
+          echo "Waiting 30s for containers to fully start..."
+          sleep 30
+          for i in 1 2 3 4 5; do
+            STATUS=$(curl -sf -o /dev/null -w "%{http_code}" \
+              --max-time 10 \
+              "${{ secrets.HEALTH_URL }}" || echo "000")
+            echo "Attempt ${i}/5: HTTP ${STATUS}"
+            if [ "${STATUS}" = "200" ]; then
+              echo "✅ Health check passed"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::Health check failed after 5 attempts"
+          exit 1
+
+      - name: Rollback on failure
+        if: failure()
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT }}
+          script: |
+            echo "⚠ Deploy failed — rolling back to previous image..."
+            cd "${{ env.DEPLOY_DIR }}"
+            # docker compose restart uses the last successful image on disk
+            docker compose \
+              -f "${{ env.DEPLOY_DIR }}/deploy/server/docker-compose.prod.yml" \
+              restart api bridge worker || true
+            docker compose \
+              -f "${{ env.DEPLOY_DIR }}/deploy/server/docker-compose.prod.yml" \
+              ps
+
+      - name: Deployment summary
+        if: success()
+        run: |
+          echo "### ✅ Production Deployed" >> $GITHUB_STEP_SUMMARY
+          echo "| | |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Image tag** | \`${{ steps.tag.outputs.tag }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Server** | \`${{ secrets.SSH_HOST }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **URL** | ${{ secrets.PRODUCTION_URL }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Deployed at** | $(date -u) |" >> $GITHUB_STEP_SUMMARY

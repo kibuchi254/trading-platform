@@ -1,0 +1,80 @@
+name: Release — Semantic Versioning
+
+# Runs after every push to main to determine if a release is needed.
+# Uses python-semantic-release + Conventional Commits:
+#   fix: patch bump    (1.0.0 → 1.0.1)
+#   feat: minor bump   (1.0.0 → 1.1.0)
+#   feat!: major bump  (1.0.0 → 2.0.0)
+#
+# On release: bumps pyproject.toml, generates CHANGELOG.md,
+# creates a GitHub Release, and pushes a v<X.Y.Z> tag.
+# That tag triggers cd.yml → production deploy (with approval).
+
+on:
+  push:
+    branches: [main]
+
+# Prevent concurrent releases (only one release at a time)
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  release:
+    name: Semantic Release
+    runs-on: ubuntu-latest
+    # Skip if the commit was itself a release bump (prevents infinite loops)
+    if: "!contains(github.event.head_commit.message, 'chore(release)')"
+    outputs:
+      released: ${{ steps.release.outputs.released }}
+      version: ${{ steps.release.outputs.version }}
+      tag: ${{ steps.release.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history needed for semantic-release to parse all commits
+          fetch-depth: 0
+          # Use a PAT if you need the pushed tag to trigger downstream workflows.
+          # GITHUB_TOKEN pushes don't trigger other workflows by default.
+          # If you have a PAT set as RELEASE_TOKEN, swap the token below.
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - run: uv python install 3.13
+
+      - name: Install python-semantic-release
+        run: uv pip install --system "python-semantic-release>=9.0.0"
+
+      - name: Configure git identity
+        run: |
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
+
+      - name: Run semantic-release
+        id: release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          semantic-release version --no-vcs-release
+          semantic-release publish
+
+      - name: Release summary
+        if: steps.release.outputs.released == 'true'
+        run: |
+          echo "### 🏷️ New Release: ${{ steps.release.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Version bumped to **${{ steps.release.outputs.version }}**" >> $GITHUB_STEP_SUMMARY
+          echo "- Tag \`${{ steps.release.outputs.tag }}\` pushed → will trigger production deploy" >> $GITHUB_STEP_SUMMARY
+
+      - name: No release needed
+        if: steps.release.outputs.released != 'true'
+        run: |
+          echo "### ℹ️ No Release" >> $GITHUB_STEP_SUMMARY
+          echo "No releasable commits found (no \`feat:\`, \`fix:\`, or breaking changes since last release)." >> $GITHUB_STEP_SUMMARY

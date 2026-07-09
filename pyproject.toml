@@ -75,6 +75,11 @@ dev = [
     "ruff>=0.7.0",
     "black>=24.10.0",
     "respx>=0.21.0",
+    # Security scanning (used by CI + scheduled.yml)
+    "bandit[toml]>=1.8.0",
+    "pip-audit>=2.7.0",
+    # Semantic versioning for automated releases
+    "python-semantic-release>=9.0.0",
 ]
 
 [project.scripts]
@@ -114,3 +119,32 @@ addopts = "-ra --strict-markers --cov=platform --cov-report=term-missing"
 [tool.coverage.run]
 source = ["src/platform"]
 omit = ["*/tests/*", "*/alembic/*"]
+
+# ─── python-semantic-release ──────────────────────────────────────────────────
+# Used by .github/workflows/release.yml
+# Conventional Commits → semver: fix=patch, feat=minor, feat!/BREAKING=major
+[tool.semantic_release]
+version_toml = ["pyproject.toml:project.version"]
+branch = "main"
+upload_to_pypi = false
+upload_to_release = true
+build_command = ""
+changelog_file = "CHANGELOG.md"
+commit_message = "chore(release): v{version} [skip ci]"
+commit_author = "github-actions[bot] <github-actions[bot]@users.noreply.github.com>"
+
+[tool.semantic_release.commit_parser_options]
+allowed_tags = ["feat", "fix", "perf", "refactor", "docs", "style", "test", "build", "ci", "chore"]
+minor_tags = ["feat"]
+patch_tags = ["fix", "perf", "refactor"]
+
+[tool.semantic_release.remote]
+type = "github"
+
+[tool.semantic_release.publish]
+upload_to_vcs_release = true
+
+# ─── bandit ───────────────────────────────────────────────────────────────────
+[tool.bandit]
+exclude_dirs = ["tests", "alembic"]
+skips = ["B101"]  # B101 = assert statements (fine in tests/type guards)

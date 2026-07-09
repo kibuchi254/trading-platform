@@ -23,7 +23,9 @@ spec:
     spec:
       containers:
         - name: api
-          image: ghcr.io/atlas/atlas-api:latest
+          # Image tag is substituted by CI/CD (cd.yml) via sed before apply.
+          # Format: ghcr.io/<org>/atlas-api:<sha-short> (staging) or <semver> (prod)
+          image: ghcr.io/__REGISTRY__/atlas-api:__IMAGE_TAG__
           ports:
             - name: http
               containerPort: 8000
