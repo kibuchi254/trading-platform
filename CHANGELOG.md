@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.0.7 (2026-07-09)
+
+### Bug Fixes
+
+- Ignore Address already in use error in start_metrics_server for multi-worker support
+  ([`2f0ef95`](https://github.com/kibuchi254/trading-platform/commit/2f0ef953f772e24585f3ccacdbdc7932667d81a8))
+
+
 ## v1.0.6 (2026-07-09)
 
 ### Bug Fixes

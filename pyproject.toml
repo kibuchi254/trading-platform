@@ -1,6 +1,6 @@
 [project]
 name = "atlas-trading-platform"
-version = "1.0.6"
+version = "1.0.7"
 description = "ATLAS — Enterprise AI-powered algorithmic trading platform (MT5-native, multi-tenant SaaS)"
 readme = "README.md"
 requires-python = ">=3.13"
