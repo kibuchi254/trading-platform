@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v1.0.6 (2026-07-09)
+
+### Bug Fixes
+
+- Import TICKS_PERSISTED in metrics.py from telemetry.py to resolve duplicated timeseries
+  registration
+  ([`cc35421`](https://github.com/kibuchi254/trading-platform/commit/cc354215d9866a0493a353680caa77ce193cca95))
+
+
 ## v1.0.5 (2026-07-09)
 
 ### Bug Fixes
