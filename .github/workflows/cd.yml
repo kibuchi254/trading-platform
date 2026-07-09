@@ -125,6 +125,7 @@ jobs:
 
             echo "▶ Rolling update — api first..."
             docker compose \
+              --env-file "${{ env.DEPLOY_DIR }}/.env" \
               -f "${{ env.DEPLOY_DIR }}/deploy/server/docker-compose.prod.yml" \
               up -d --no-deps --remove-orphans api
 
@@ -133,11 +134,13 @@ jobs:
 
             echo "▶ Rolling update — bridge and worker..."
             docker compose \
+              --env-file "${{ env.DEPLOY_DIR }}/.env" \
               -f "${{ env.DEPLOY_DIR }}/deploy/server/docker-compose.prod.yml" \
               up -d --no-deps bridge worker
 
             echo "▶ Final container status:"
             docker compose \
+              --env-file "${{ env.DEPLOY_DIR }}/.env" \
               -f "${{ env.DEPLOY_DIR }}/deploy/server/docker-compose.prod.yml" \
               ps
 
@@ -180,9 +183,11 @@ jobs:
             cd "${{ env.DEPLOY_DIR }}"
             # docker compose restart uses the last successful image on disk
             docker compose \
+              --env-file "${{ env.DEPLOY_DIR }}/.env" \
               -f "${{ env.DEPLOY_DIR }}/deploy/server/docker-compose.prod.yml" \
               restart api bridge worker || true
             docker compose \
+              --env-file "${{ env.DEPLOY_DIR }}/.env" \
               -f "${{ env.DEPLOY_DIR }}/deploy/server/docker-compose.prod.yml" \
               ps
 
