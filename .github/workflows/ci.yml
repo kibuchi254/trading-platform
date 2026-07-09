@@ -203,6 +203,7 @@ jobs:
       contents: read
       packages: write
       id-token: write
+      attestations: write
     outputs:
       image-tag: ${{ steps.meta.outputs.version }}
       image-digest: ${{ steps.push.outputs.digest }}
