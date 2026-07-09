@@ -1,4 +1,5 @@
 """Dummy integration test to ensure pytest finds at least one test in this folder."""
+
 from __future__ import annotations
 
 
