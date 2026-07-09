@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v1.0.5 (2026-07-09)
+
+### Bug Fixes
+
+- Proxy standard library platform module in platform/__init__.py to prevent package shadowing errors
+  ([`46140ab`](https://github.com/kibuchi254/trading-platform/commit/46140ab387c2ae5aed985c2530030fe3e21b1290))
+
+### Chores
+
+- Retrigger CI/CD deployment
+  ([`3259508`](https://github.com/kibuchi254/trading-platform/commit/32595085edf3bd7cf54c258da247d73990aee488))
+
+
 ## v1.0.4 (2026-07-09)
 
 ### Bug Fixes
