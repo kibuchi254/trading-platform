@@ -17,7 +17,7 @@ RUN pip install --no-cache-dir uv
 WORKDIR /app
 
 # Install deps first (cache layer)
-COPY pyproject.toml ./
+COPY pyproject.toml README.md ./
 RUN uv pip install --system -e ".[dev]"
 
 # Copy source
