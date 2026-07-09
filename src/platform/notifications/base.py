@@ -119,6 +119,7 @@ class NotificationDispatcher:
 
     def __init__(self, channels: dict[str, NotificationChannel] | None = None) -> None:
         self._channels: dict[str, NotificationChannel] = dict(channels or {})
+        self._retry_backoff: tuple[int | float, ...] = _RETRY_BACKOFF_SECONDS
         _log.info("dispatcher_initialized", channels=list(self._channels))
 
     # ── Registration ────────────────────────────────────────────────────
@@ -157,7 +158,7 @@ class NotificationDispatcher:
 
         last_error: str = ""
         # Initial attempt (0s) + one sleep per listed backoff = up to 4 tries.
-        for attempt_idx, backoff in enumerate((0, *_RETRY_BACKOFF_SECONDS)):
+        for attempt_idx, backoff in enumerate((0, *self._retry_backoff)):
             if backoff > 0:
                 await asyncio.sleep(backoff)
             attempt_num = attempt_idx + 1

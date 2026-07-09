@@ -16,7 +16,7 @@ class Settings(BaseSettings):
 
     # ── Runtime ──────────────────────────────────────────────────────────
     app_name: str = "atlas"
-    env: Literal["development", "staging", "production"] = "development"
+    env: Literal["development", "staging", "production", "test"] = "development"
     log_level: str = "INFO"
     secret_key: SecretStr = SecretStr("change-me-at-least-16-chars")
     jwt_algorithm: str = "HS256"

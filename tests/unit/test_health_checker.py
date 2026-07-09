@@ -96,7 +96,13 @@ async def test_overall_unhealthy_when_any_unhealthy() -> None:
     checker = HealthChecker()
     checker.register(AlwaysHealthy())
     checker.register(AlwaysDegraded())
-    checker.register(AlwaysUnhealthy())
+    
+    # Non-critical unhealthy check only degrades the system.
+    # To force overall UNHEALTHY status, the check must be marked critical.
+    class AlwaysUnhealthyCritical(AlwaysUnhealthy):
+        critical = True
+        
+    checker.register(AlwaysUnhealthyCritical())
     overall = await checker.overall()
     assert overall.status == "UNHEALTHY"
 

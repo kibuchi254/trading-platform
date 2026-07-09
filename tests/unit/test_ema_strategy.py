@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from platform.strategies.builtin.ema_cross import EMACrossStrategy
 from platform.strategies.sdk import Bar, StrategyContext
 from uuid import uuid4
@@ -20,7 +20,7 @@ async def test_ema_cross_emits_buy_on_bullish_cross() -> None:
         bar = Bar(
             symbol="XAUUSD",
             timeframe="M15",
-            ts=base.replace(minute=i * 15),
+            ts=base + timedelta(minutes=i * 15),
             open=p,
             high=p + 0.5,
             low=p - 0.5,
