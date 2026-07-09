@@ -15,7 +15,7 @@ x-app-image: &app-image
 x-app-base: &app-base
   <<: *app-image
   restart: unless-stopped
-  env_file: .env
+  env_file: ../../.env
   depends_on:
     postgres:
       condition: service_healthy
@@ -120,7 +120,7 @@ services:
   flower:
     image: mher/flower:2.0
     restart: unless-stopped
-    env_file: .env
+    env_file: ../../.env
     ports:
       - "127.0.0.1:5555:5555"   # Loopback only — protect with nginx auth
     command: celery --broker=${CELERY_BROKER_URL} flower --port=5555
