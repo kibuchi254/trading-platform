@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.0.4 (2026-07-09)
+
+### Bug Fixes
+
+- Add PYTHONPATH to backend.Dockerfile to enable platform package discovery
+  ([`f835132`](https://github.com/kibuchi254/trading-platform/commit/f835132867fa62061e8c495fa40f11c8ec10764d))
+
+
 ## v1.0.3 (2026-07-09)
 
 ### Bug Fixes
