@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.0.3 (2026-07-09)
+
+### Bug Fixes
+
+- Update relative path of env_file to '../../.env' in docker-compose.prod.yml
+  ([`104dd5c`](https://github.com/kibuchi254/trading-platform/commit/104dd5c5e99cc2ea0a63a158b2fbc0aba3ef4dfc))
+
+
 ## v1.0.2 (2026-07-09)
 
 ### Bug Fixes
