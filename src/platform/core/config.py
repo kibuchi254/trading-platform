@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     app_name: str = "atlas"
     env: Literal["development", "staging", "production"] = "development"
     log_level: str = "INFO"
-    secret_key: SecretStr = SecretStr("change-me")
+    secret_key: SecretStr = SecretStr("change-me-at-least-16-chars")
     jwt_algorithm: str = "HS256"
     jwt_access_ttl_seconds: int = 900
     jwt_refresh_ttl_seconds: int = 2_592_000
