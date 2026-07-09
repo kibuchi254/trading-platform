@@ -24,6 +24,7 @@ into a shared Prometheus instance.
 from __future__ import annotations
 
 from platform.core.logging import get_logger
+from platform.core.telemetry import TICKS_PERSISTED
 from typing import TYPE_CHECKING, Any
 
 from prometheus_client import Counter, Gauge
@@ -54,10 +55,7 @@ TICKS_RECEIVED = Counter(
     ["terminal_id", "symbol"],
 )
 
-TICKS_PERSISTED = Counter(
-    "atlas_ticks_persisted_total",
-    "Ticks successfully persisted to the database",
-)
+# TICKS_PERSISTED is imported from platform.core.telemetry to prevent duplicate registration
 
 EVENT_BUS_PUBLISHED = Counter(
     "atlas_event_bus_published_total",
@@ -93,7 +91,7 @@ def record_tick(terminal_id: str, symbol: str) -> None:
 
 def record_tick_persisted() -> None:
     """Increment the tick-persisted counter."""
-    TICKS_PERSISTED.inc()
+    TICKS_PERSISTED.labels(source="tick_store").inc()
 
 
 def record_ai_prediction(module: str, direction: str) -> None:
