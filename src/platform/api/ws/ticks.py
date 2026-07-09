@@ -1,16 +1,15 @@
 """Ticks WebSocket router — streams live ticks to clients."""
+
 from __future__ import annotations
 
 import asyncio
 import json
-
-from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
-from pydantic import BaseModel
-
-from platform.core.dependencies import get_current_user
 from platform.core.logging import get_logger
 from platform.events.bus import get_event_bus
 from platform.events.topics import Topic
+
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from pydantic import BaseModel
 
 router = APIRouter(tags=["ws"])
 _log = get_logger(__name__)
@@ -29,6 +28,7 @@ async def ticks_ws(ws: WebSocket) -> None:
         return
     try:
         from platform.core.security import decode_token
+
         claims = decode_token(token)
     except Exception:
         await ws.close(code=4401, reason="Bad token")
@@ -60,11 +60,11 @@ async def ticks_ws(ws: WebSocket) -> None:
         while True:
             payload = await asyncio.wait_for(queue.get(), timeout=30)
             await ws.send_json({"type": "tick", **payload})
-    except asyncio.TimeoutError:
+    except TimeoutError:
         await ws.send_json({"type": "ping"})
     except WebSocketDisconnect:
         pass
-    except Exception:  # noqa: BLE001
+    except Exception:
         _log.exception("ticks_ws_error")
     finally:
         bus._handlers[Topic.TICKS].remove(handler)

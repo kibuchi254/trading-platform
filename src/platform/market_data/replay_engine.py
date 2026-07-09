@@ -13,28 +13,28 @@ Each replay runs in its own ``asyncio.Task`` and is tracked in
     - ``10.0`` = 10× faster (delays divided by 10)
     - ``0.0``  = max speed (no delays — flush as fast as the DB can stream)
 """
+
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timezone
-from typing import Any
-from uuid import UUID
-
-from sqlalchemy import select
-
+from datetime import UTC, datetime
 from platform.core.logging import get_logger
 from platform.db.models import Tick
 from platform.db.session import db_context
 from platform.domain.market_data import ReplaySession, ReplayStatus
 from platform.events.bus import get_event_bus
 from platform.events.topics import Topic
+from typing import Any
+from uuid import UUID
+
+from sqlalchemy import select
 
 _log = get_logger(__name__)
 
 # ── Tunables ─────────────────────────────────────────────────────────────────
-BATCH_SIZE: int = 10_000          # rows read per DB round-trip
-MAX_SPEED_SENTINEL: float = 1e6   # internal value for "0.0 = max speed"
-POLL_INTERVAL_SEC: float = 0.05   # pause/resuse responsiveness
+BATCH_SIZE: int = 10_000  # rows read per DB round-trip
+MAX_SPEED_SENTINEL: float = 1e6  # internal value for "0.0 = max speed"
+POLL_INTERVAL_SEC: float = 0.05  # pause/resuse responsiveness
 
 
 class _SessionState:
@@ -107,14 +107,15 @@ class ReplayEngine:
         session.start_session()  # PENDING → RUNNING
 
         state = _SessionState(session=session, raw_speed=speed)
-        state.task = asyncio.create_task(
-            self._run(state), name=f"replay:{sid}"
-        )
+        state.task = asyncio.create_task(self._run(state), name=f"replay:{sid}")
         self._sessions[sid] = state
         _log.info(
             "replay_started",
-            session_id=sid, symbol=symbol,
-            start=start.isoformat(), end=end.isoformat(), speed=speed,
+            session_id=sid,
+            symbol=symbol,
+            start=start.isoformat(),
+            end=end.isoformat(),
+            speed=speed,
         )
         return session
 
@@ -149,7 +150,7 @@ class ReplayEngine:
                 pass
         try:
             state.session.complete()
-        except Exception:  # noqa: BLE001 — aggregate may already be completed
+        except Exception:
             pass
         _log.info("replay_stopped", session_id=sid)
 
@@ -177,14 +178,13 @@ class ReplayEngine:
         # Restart from the seek point — keep original end & speed.
         state.session.status = ReplayStatus.RUNNING
         state.pause_event.set()
-        state.task = asyncio.create_task(
-            self._run(state), name=f"replay:{str(session_id)}"
-        )
+        state.task = asyncio.create_task(self._run(state), name=f"replay:{session_id!s}")
         if was_paused:
             await self.pause_replay(session_id)
         _log.info(
             "replay_seek",
-            session_id=str(session_id), timestamp=timestamp.isoformat(),
+            session_id=str(session_id),
+            timestamp=timestamp.isoformat(),
         )
 
     def list_sessions(self) -> list[ReplaySession]:
@@ -259,11 +259,11 @@ class ReplayEngine:
         except asyncio.CancelledError:
             _log.info("replay_cancelled", session_id=sid)
             raise
-        except Exception:  # noqa: BLE001
+        except Exception:
             _log.exception("replay_failed", session_id=sid)
             try:
                 state.session.complete()
-            except Exception:  # noqa: BLE001
+            except Exception:
                 pass
 
     @staticmethod
@@ -277,8 +277,13 @@ class ReplayEngine:
         """Read up to ``limit`` ticks for ``symbol`` in ``[start, end]`` ascending."""
         stmt = (
             select(
-                Tick.terminal_id, Tick.symbol, Tick.bid, Tick.ask,
-                Tick.last, Tick.volume, Tick.ts,
+                Tick.terminal_id,
+                Tick.symbol,
+                Tick.bid,
+                Tick.ask,
+                Tick.last,
+                Tick.volume,
+                Tick.ts,
             )
             .where(
                 Tick.symbol == symbol,
@@ -298,7 +303,7 @@ class ReplayEngine:
                 "ask": float(r.ask),
                 "last": float(r.last) if r.last is not None else None,
                 "volume": float(r.volume) if r.volume is not None else None,
-                "ts": r.ts if r.ts.tzinfo else r.ts.replace(tzinfo=timezone.utc),
+                "ts": r.ts if r.ts.tzinfo else r.ts.replace(tzinfo=UTC),
             }
             for r in rows
         ]

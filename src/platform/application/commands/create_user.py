@@ -1,14 +1,14 @@
 """Create a new user."""
+
 from __future__ import annotations
-
-from uuid import UUID, uuid4
-
-from pydantic import BaseModel, EmailStr
 
 from platform.core.exceptions import ConflictError
 from platform.core.security import hash_password
 from platform.db.models import Organization, User
 from platform.db.session import db_context
+from uuid import UUID, uuid4
+
+from pydantic import BaseModel, EmailStr
 from sqlalchemy import select
 
 
@@ -30,7 +30,9 @@ class CreateUserResult(BaseModel):
 async def handle_create_user(cmd: CreateUserCommand) -> CreateUserResult:
     async with db_context() as db:
         # Check email uniqueness
-        existing = (await db.execute(select(User).where(User.email == cmd.email.lower()))).scalar_one_or_none()
+        existing = (
+            await db.execute(select(User).where(User.email == cmd.email.lower()))
+        ).scalar_one_or_none()
         if existing is not None:
             raise ConflictError(f"User with email {cmd.email} already exists")
         # Verify org exists
@@ -51,5 +53,8 @@ async def handle_create_user(cmd: CreateUserCommand) -> CreateUserResult:
         await db.commit()
         await db.refresh(u)
         return CreateUserResult(
-            id=u.id, email=u.email, display_name=u.display_name, role=u.role,
+            id=u.id,
+            email=u.email,
+            display_name=u.display_name,
+            role=u.role,
         )

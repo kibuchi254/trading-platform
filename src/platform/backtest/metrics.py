@@ -3,11 +3,12 @@
 All functions handle empty inputs gracefully (return 0.0) so callers can
 compute metrics on partial results without defensive try/except.
 """
+
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 from datetime import datetime
-from typing import Sequence
 
 
 def compute_equity_curve(
@@ -105,7 +106,7 @@ def compute_sortino_ratio(
     downside = [r for r in excess if r < 0]
     if not downside:
         return float("inf") if mean > 0 else 0.0
-    downside_var = sum(r ** 2 for r in downside) / len(downside)
+    downside_var = sum(r**2 for r in downside) / len(downside)
     downside_std = math.sqrt(downside_var)
     if downside_std == 0:
         return 0.0
@@ -136,8 +137,7 @@ def compute_avg_trade_duration(trades: list[dict]) -> float:
     if not trades:
         return 0.0
     durations = [
-        t.get("duration_seconds", 0) for t in trades
-        if t.get("duration_seconds") is not None
+        t.get("duration_seconds", 0) for t in trades if t.get("duration_seconds") is not None
     ]
     if not durations:
         return 0.0
@@ -199,9 +199,18 @@ def compute_volatility(returns: Sequence[float], periods_per_year: int = 252) ->
 
 
 __all__ = [
-    "compute_equity_curve", "compute_drawdown_series", "compute_max_drawdown",
-    "compute_returns", "compute_sharpe_ratio", "compute_sortino_ratio",
-    "compute_profit_factor", "compute_win_rate", "compute_avg_trade_duration",
-    "compute_expectancy", "compute_calibration", "compute_risk_adjusted_return",
-    "compute_cagr", "compute_volatility",
+    "compute_avg_trade_duration",
+    "compute_cagr",
+    "compute_calibration",
+    "compute_drawdown_series",
+    "compute_equity_curve",
+    "compute_expectancy",
+    "compute_max_drawdown",
+    "compute_profit_factor",
+    "compute_returns",
+    "compute_risk_adjusted_return",
+    "compute_sharpe_ratio",
+    "compute_sortino_ratio",
+    "compute_volatility",
+    "compute_win_rate",
 ]

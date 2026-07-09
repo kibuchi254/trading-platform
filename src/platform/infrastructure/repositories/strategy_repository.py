@@ -5,16 +5,16 @@ aggregate. The aggregate owns its lifecycle (activate / deactivate) and its
 config version; this repository is the only place SQLAlchemy touches a
 Strategy.
 """
+
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from platform.db.models import Strategy as StrategyModel
+from platform.domain.strategy import Strategy, StrategyConfig
 from uuid import UUID
 
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from platform.db.models import Strategy as StrategyModel
-from platform.domain.strategy import Strategy, StrategyConfig
 
 
 class StrategyRepository:
@@ -81,10 +81,15 @@ class StrategyRepository:
         return self.to_domain(m) if m else None
 
     async def list_by_org(
-        self, org_id: UUID, *, active_only: bool = False, limit: int = 200,
+        self,
+        org_id: UUID,
+        *,
+        active_only: bool = False,
+        limit: int = 200,
     ) -> list[Strategy]:
         stmt = select(StrategyModel).where(
-            StrategyModel.org_id == org_id, StrategyModel.deleted_at.is_(None),
+            StrategyModel.org_id == org_id,
+            StrategyModel.deleted_at.is_(None),
         )
         if active_only:
             stmt = stmt.where(StrategyModel.is_active.is_(True))
@@ -121,22 +126,32 @@ class StrategyRepository:
         return entity
 
     async def activate(self, id: UUID) -> bool:
-        stmt = update(StrategyModel).where(
-            StrategyModel.id == id, StrategyModel.deleted_at.is_(None),
-        ).values(
-            is_active=True,
-            updated_at=datetime.now(timezone.utc),
+        stmt = (
+            update(StrategyModel)
+            .where(
+                StrategyModel.id == id,
+                StrategyModel.deleted_at.is_(None),
+            )
+            .values(
+                is_active=True,
+                updated_at=datetime.now(UTC),
+            )
         )
         result = await self.db.execute(stmt)
         await self.db.flush()
         return (result.rowcount or 0) > 0
 
     async def deactivate(self, id: UUID) -> bool:
-        stmt = update(StrategyModel).where(
-            StrategyModel.id == id, StrategyModel.deleted_at.is_(None),
-        ).values(
-            is_active=False,
-            updated_at=datetime.now(timezone.utc),
+        stmt = (
+            update(StrategyModel)
+            .where(
+                StrategyModel.id == id,
+                StrategyModel.deleted_at.is_(None),
+            )
+            .values(
+                is_active=False,
+                updated_at=datetime.now(UTC),
+            )
         )
         result = await self.db.execute(stmt)
         await self.db.flush()

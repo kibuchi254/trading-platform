@@ -6,19 +6,19 @@ This command is the "production register" path — the strategy is created
 and immediately activated, ready for the strategy engine to subscribe to
 bar-close events on its behalf.
 """
+
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from uuid import UUID
-
-from pydantic import BaseModel
-
+from datetime import UTC, datetime
 from platform.core.exceptions import ConflictError
 from platform.core.logging import get_logger
 from platform.db.models import Strategy as StrategyModel
 from platform.db.session import db_context
 from platform.events.bus import get_event_bus
 from platform.events.topics import Topic
+from uuid import UUID
+
+from pydantic import BaseModel
 from sqlalchemy import select
 
 _log = get_logger(__name__)
@@ -79,7 +79,7 @@ async def handle_register_strategy(cmd: RegisterStrategyCommand) -> RegisterStra
         db.add(strategy)
         try:
             await db.commit()
-        except Exception as e:  # noqa: BLE001 — race-condition guard for the unique index
+        except Exception as e:
             await db.rollback()
             raise ConflictError(f"Strategy slug already exists: {cmd.slug}") from e
         await db.refresh(strategy)
@@ -90,8 +90,9 @@ async def handle_register_strategy(cmd: RegisterStrategyCommand) -> RegisterStra
             slug=strategy.slug,
             kind=strategy.kind,
             is_active=bool(strategy.is_active),
-            registered_at=strategy.created_at.isoformat() if strategy.created_at
-            else datetime.now(timezone.utc).isoformat(),
+            registered_at=strategy.created_at.isoformat()
+            if strategy.created_at
+            else datetime.now(UTC).isoformat(),
         )
 
     await get_event_bus().publish(

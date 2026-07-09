@@ -1,18 +1,23 @@
 """Test the Order aggregate — pure domain logic, no I/O."""
+
 from __future__ import annotations
 
-import pytest
+from platform.core.exceptions import DomainError
+from platform.domain.shared import Quantity
+from platform.domain.trading import Order, OrderSide, OrderStatus, OrderType
 from uuid import uuid4
 
-from platform.core.exceptions import DomainError
-from platform.domain.shared import Price, Quantity
-from platform.domain.trading import Order, OrderSide, OrderStatus, OrderType
+import pytest
 
 
 def _make_order() -> Order:
     return Order(
-        org_id=uuid4(), terminal_id=uuid4(), client_order_id="test-1",
-        symbol="XAUUSD", side=OrderSide.BUY, order_type=OrderType.MARKET,
+        org_id=uuid4(),
+        terminal_id=uuid4(),
+        client_order_id="test-1",
+        symbol="XAUUSD",
+        side=OrderSide.BUY,
+        order_type=OrderType.MARKET,
         volume=Quantity(volume=0.10),
     )
 

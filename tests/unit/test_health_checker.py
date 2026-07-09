@@ -1,10 +1,8 @@
 """Test the HealthChecker — register, run_all, overall status aggregation."""
+
 from __future__ import annotations
 
 import asyncio
-
-import pytest
-
 from platform.observability.health import HealthCheck, HealthChecker, HealthStatus
 
 
@@ -12,21 +10,27 @@ class AlwaysHealthy(HealthCheck):
     name = "always_healthy"
 
     async def check(self) -> HealthStatus:
-        return HealthStatus(name=self.name, status="HEALTHY", latency_ms=1.0, message="ok", details={})
+        return HealthStatus(
+            name=self.name, status="HEALTHY", latency_ms=1.0, message="ok", details={}
+        )
 
 
 class AlwaysDegraded(HealthCheck):
     name = "always_degraded"
 
     async def check(self) -> HealthStatus:
-        return HealthStatus(name=self.name, status="DEGRADED", latency_ms=10.0, message="slow", details={})
+        return HealthStatus(
+            name=self.name, status="DEGRADED", latency_ms=10.0, message="slow", details={}
+        )
 
 
 class AlwaysUnhealthy(HealthCheck):
     name = "always_unhealthy"
 
     async def check(self) -> HealthStatus:
-        return HealthStatus(name=self.name, status="UNHEALTHY", latency_ms=0, message="down", details={})
+        return HealthStatus(
+            name=self.name, status="UNHEALTHY", latency_ms=0, message="down", details={}
+        )
 
 
 class FailingCheck(HealthCheck):
@@ -52,7 +56,9 @@ async def test_run_all_concurrent() -> None:
 
         async def check(self) -> HealthStatus:
             await asyncio.sleep(0.1)
-            return HealthStatus(name=self.name, status="HEALTHY", latency_ms=100, message="ok", details={})
+            return HealthStatus(
+                name=self.name, status="HEALTHY", latency_ms=100, message="ok", details={}
+            )
 
     checker.register(SlowCheck())
     # Register 5 of them
@@ -62,6 +68,7 @@ async def test_run_all_concurrent() -> None:
         checker.register(c)
 
     import time
+
     start = time.monotonic()
     results = await checker.run_all()
     elapsed = time.monotonic() - start

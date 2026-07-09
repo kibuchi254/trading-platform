@@ -5,10 +5,10 @@ into one of four regimes: LOW / NORMAL / HIGH / EXTREME. EXTREME regimes
 carry a bearish bias because they typically coincide with liquidity
 withdrawals, gap risk, and deleveraging.
 """
+
 from __future__ import annotations
 
 import statistics
-
 from platform.ai.orchestrator import AIContext, AIModule, AIPrediction
 
 
@@ -60,6 +60,7 @@ class VolatilityAI(AIModule):
     neutral. The payload carries the regime, vol percentage, and a
     suggested position-size multiplier for the risk engine.
     """
+
     name = "volatility"
     version = "1.0.0"
 
@@ -67,10 +68,12 @@ class VolatilityAI(AIModule):
         returns = ctx.features.get("returns", []) or []
         if not returns:
             return AIPrediction(
-                module=self.name, symbol=ctx.symbol, direction="neutral",
-                confidence=0.1, horizon="short",
-                payload={"regime": "UNKNOWN", "vol_pct": 0.0,
-                         "suggested_size_factor": 1.0},
+                module=self.name,
+                symbol=ctx.symbol,
+                direction="neutral",
+                confidence=0.1,
+                horizon="short",
+                payload={"regime": "UNKNOWN", "vol_pct": 0.0, "suggested_size_factor": 1.0},
             )
         vol = realized_vol(returns, window=20)
         vol_pct = _as_pct(vol)
@@ -86,8 +89,11 @@ class VolatilityAI(AIModule):
             direction = "neutral"
             confidence = 0.4
         return AIPrediction(
-            module=self.name, symbol=ctx.symbol, direction=direction,
-            confidence=confidence, horizon="short",
+            module=self.name,
+            symbol=ctx.symbol,
+            direction=direction,
+            confidence=confidence,
+            horizon="short",
             payload={
                 "regime": regime,
                 "vol_pct": round(vol_pct, 3),

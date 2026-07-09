@@ -30,12 +30,12 @@ require_fvg : bool
 min_strength : float
     Minimum signal strength threshold.
 """
+
 from __future__ import annotations
 
 from collections import deque
-from typing import Any
-
 from platform.strategies.sdk import Bar, Signal, Strategy, StrategyContext, strategy
+from typing import Any
 
 
 def _is_bullish_fvg(b_prev: Bar, b_next: Bar) -> bool:
@@ -115,10 +115,20 @@ class SMCOrderBlocksStrategy(Strategy):
         price = bar.close
         # Unify bullish/bearish scans: (block_type, side, stop_mult, strength_fn)
         for btype, side, stop_mult, stren_fn in [
-            ("bullish", "buy",   0.999, lambda hi, lo, p: min(1.0, 0.5 + (hi - p) / (hi - lo + 1e-9) * 0.5)),
-            ("bearish", "sell",  1.001, lambda hi, lo, p: min(1.0, 0.5 + (p - lo) / (hi - lo + 1e-9) * 0.5)),
+            (
+                "bullish",
+                "buy",
+                0.999,
+                lambda hi, lo, p: min(1.0, 0.5 + (hi - p) / (hi - lo + 1e-9) * 0.5),
+            ),
+            (
+                "bearish",
+                "sell",
+                1.001,
+                lambda hi, lo, p: min(1.0, 0.5 + (p - lo) / (hi - lo + 1e-9) * 0.5),
+            ),
         ]:
-            for (idx, bt, hi, lo) in self._blocks:
+            for idx, bt, hi, lo in self._blocks:
                 if bt != btype or not (lo <= price <= hi):
                     continue
                 if self.require_fvg and not any(

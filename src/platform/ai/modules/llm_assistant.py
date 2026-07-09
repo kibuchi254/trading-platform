@@ -6,15 +6,15 @@ call. Supports the openai/anthropic/vllm/ollama providers declared in
 Settings, and falls back to a deterministic template reply when the
 provider is 'none'.
 """
+
 from __future__ import annotations
 
 import json
+from platform.ai.orchestrator import AIContext, AIModule, AIPrediction
+from platform.core.config import get_settings
 from typing import Any
 
 import httpx
-
-from platform.ai.orchestrator import AIContext, AIModule, AIPrediction
-from platform.core.config import get_settings
 
 
 def build_system_prompt(context: dict[str, Any]) -> str:
@@ -30,8 +30,14 @@ def build_system_prompt(context: dict[str, Any]) -> str:
     )
 
 
-async def call_llm(provider: str, api_key: str, base_url: str, model: str,
-                   messages: list[dict[str, str]], timeout: int) -> str:
+async def call_llm(
+    provider: str,
+    api_key: str,
+    base_url: str,
+    model: str,
+    messages: list[dict[str, str]],
+    timeout: int,
+) -> str:
     """Call an OpenAI-compatible chat-completions endpoint.
 
     Works across openai/anthropic/vllm/ollama because all four expose an
@@ -48,8 +54,9 @@ async def call_llm(provider: str, api_key: str, base_url: str, model: str,
     if provider == "anthropic":
         payload["max_tokens"] = 1024
     async with httpx.AsyncClient(timeout=timeout) as client:
-        resp = await client.post(base.rstrip("/") + "/chat/completions",
-                                 headers=headers, json=payload)
+        resp = await client.post(
+            base.rstrip("/") + "/chat/completions", headers=headers, json=payload
+        )
         resp.raise_for_status()
         data = resp.json()
     return data["choices"][0]["message"]["content"]
@@ -75,6 +82,7 @@ class LLMTradingAssistant(AIModule):
     completion to the configured LLM provider. Falls back to a local
     template reply when provider == 'none' or on error.
     """
+
     name = "llm_assistant"
     version = "1.1.0"
 
@@ -86,10 +94,17 @@ class LLMTradingAssistant(AIModule):
         if provider == "none" or not message:
             reply = _fallback_reply(message, context) if message else ""
             return AIPrediction(
-                module=self.name, symbol=ctx.symbol, direction="neutral",
-                confidence=0.2, horizon="n/a",
-                payload={"reply": reply, "suggested_actions": [],
-                         "citations": [], "provider": provider},
+                module=self.name,
+                symbol=ctx.symbol,
+                direction="neutral",
+                confidence=0.2,
+                horizon="n/a",
+                payload={
+                    "reply": reply,
+                    "suggested_actions": [],
+                    "citations": [],
+                    "provider": provider,
+                },
             )
         try:
             reply = await call_llm(
@@ -104,12 +119,15 @@ class LLMTradingAssistant(AIModule):
                 timeout=settings.llm_timeout_seconds,
             )
             confidence = 0.8
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             reply = _fallback_reply(message, context) + f"\n[LLM error: {exc}]"
             confidence = 0.3
         return AIPrediction(
-            module=self.name, symbol=ctx.symbol, direction="neutral",
-            confidence=confidence, horizon="n/a",
+            module=self.name,
+            symbol=ctx.symbol,
+            direction="neutral",
+            confidence=confidence,
+            horizon="n/a",
             payload={
                 "reply": reply,
                 "suggested_actions": [],

@@ -9,17 +9,16 @@ The application layer reads ORM models directly — no repository indirection
 is needed for read-only queries (per the project convention noted in
 ``platform.application.commands.place_order``).
 """
+
 from __future__ import annotations
 
 from datetime import datetime
+from platform.db.models import Order as OrderModel
+from platform.db.session import db_context
 from uuid import UUID
 
 from pydantic import BaseModel
 from sqlalchemy import select
-
-from platform.db.models import Order as OrderModel
-from platform.db.session import db_context
-
 
 # ── Query + DTO ────────────────────────────────────────────────────────────
 

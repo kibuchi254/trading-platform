@@ -14,15 +14,15 @@ Celery Beat's periodic schedule is defined in
 
 Tasks subscribe to events via Redis pubsub or get enqueued by handlers.
 """
+
 from __future__ import annotations
 
+from platform.core.config import get_settings
+from platform.infrastructure.celery_schedules import beat_schedule
 from typing import Any
 
 from celery import Celery
 from celery.signals import worker_ready
-
-from platform.core.config import get_settings
-from platform.infrastructure.celery_schedules import beat_schedule
 
 settings = get_settings()
 
@@ -71,6 +71,7 @@ app.conf.update(
 @worker_ready.connect
 def _on_ready(sender: Any, **_kwargs: Any) -> None:
     from platform.core.logging import configure_logging, get_logger
+
     configure_logging()
     get_logger(__name__).info("celery_worker_ready", host=sender.hostname)
 
@@ -86,6 +87,7 @@ def _on_ready(sender: Any, **_kwargs: Any) -> None:
 # container) can still load the app for introspection purposes.
 try:
     from platform.infrastructure import tasks as _tasks  # noqa: F401
-except Exception:  # noqa: BLE001
+except Exception:
     import logging
+
     logging.getLogger(__name__).exception("celery_tasks_import_failed")

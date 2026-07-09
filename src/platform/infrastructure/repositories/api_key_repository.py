@@ -5,16 +5,16 @@ UI display. Revocation is implemented as a hard delete (no `is_revoked` column
 on the ORM) — once a row is gone the key cannot validate. `update_last_used`
 is a write-light touch used on every authenticated request.
 """
+
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from platform.db.models import APIKey as APIKeyModel
+from platform.domain.identity import APIKey, APIKeyPrefix, Scopes
 from uuid import UUID
 
 from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from platform.db.models import APIKey as APIKeyModel
-from platform.domain.identity import APIKey, APIKeyPrefix, Scopes
 
 
 class APIKeyRepository:
@@ -93,8 +93,12 @@ class APIKeyRepository:
 
     async def update_last_used(self, id: UUID) -> bool:
         """Bump last_used_at to now. Cheap write used on every auth."""
-        stmt = update(APIKeyModel).where(APIKeyModel.id == id).values(
-            last_used_at=datetime.now(timezone.utc),
+        stmt = (
+            update(APIKeyModel)
+            .where(APIKeyModel.id == id)
+            .values(
+                last_used_at=datetime.now(UTC),
+            )
         )
         result = await self.db.execute(stmt)
         await self.db.flush()

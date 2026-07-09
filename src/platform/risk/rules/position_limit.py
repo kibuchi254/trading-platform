@@ -13,15 +13,16 @@ The check is performed against the ``positions`` table filtered by
 new position; closing orders (which the bridge tags via the order type)
 should bypass this rule at the engine level.
 """
-from __future__ import annotations
 
-from sqlalchemy import func, select
+from __future__ import annotations
 
 from platform.core.exceptions import RiskLimitBreached
 from platform.core.logging import get_logger
 from platform.db.models import Position
 from platform.db.session import db_context
 from platform.risk.engine import OrderContext, RiskRule
+
+from sqlalchemy import func, select
 
 _log = get_logger(__name__)
 
@@ -59,20 +60,16 @@ class PositionLimitRule(RiskRule):
         """
         async with db_context() as session:
             # Total open positions for this org.
-            total_stmt = (
-                select(func.count(Position.id))
-                .where(Position.org_id == ctx.org_id, Position.status == "open")
+            total_stmt = select(func.count(Position.id)).where(
+                Position.org_id == ctx.org_id, Position.status == "open"
             )
             total_open = (await session.execute(total_stmt)).scalar_one()
 
             # Open positions for this specific symbol.
-            sym_stmt = (
-                select(func.count(Position.id))
-                .where(
-                    Position.org_id == ctx.org_id,
-                    Position.status == "open",
-                    Position.symbol == ctx.symbol,
-                )
+            sym_stmt = select(func.count(Position.id)).where(
+                Position.org_id == ctx.org_id,
+                Position.status == "open",
+                Position.symbol == ctx.symbol,
             )
             sym_open = (await session.execute(sym_stmt)).scalar_one()
 

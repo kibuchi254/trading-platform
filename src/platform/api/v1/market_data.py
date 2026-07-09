@@ -1,16 +1,16 @@
 """Market Data REST router — historical candles, latest ticks, symbol metadata."""
+
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
+from platform.core.dependencies import CurrentUser, get_current_user
+from platform.db.models import Candle, Symbol
+from platform.db.session import get_db
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from platform.core.dependencies import CurrentUser, get_current_user
-from platform.db.models import Candle, Symbol
-from platform.db.session import get_db
 
 router = APIRouter(prefix="/market-data", tags=["market-data"])
 
@@ -43,8 +43,12 @@ async def candles(
     rows = (await db.execute(stmt)).scalars().all()
     return [
         CandleOut(
-            ts=r.ts, open=float(r.open), high=float(r.high), low=float(r.low),
-            close=float(r.close), volume=float(r.volume),
+            ts=r.ts,
+            open=float(r.open),
+            high=float(r.high),
+            low=float(r.low),
+            close=float(r.close),
+            volume=float(r.volume),
         )
         for r in reversed(rows)
     ]
@@ -59,9 +63,13 @@ async def list_symbols(
     rows = (await db.execute(stmt)).scalars().all()
     return [
         {
-            "id": str(r.id), "name": r.name, "category": r.category,
-            "digits": r.digits, "volume_min": float(r.volume_min),
-            "volume_step": float(r.volume_step), "volume_max": float(r.volume_max),
+            "id": str(r.id),
+            "name": r.name,
+            "category": r.category,
+            "digits": r.digits,
+            "volume_min": float(r.volume_min),
+            "volume_step": float(r.volume_step),
+            "volume_max": float(r.volume_max),
         }
         for r in rows
     ]

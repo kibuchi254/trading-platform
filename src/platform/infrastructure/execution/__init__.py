@@ -34,6 +34,7 @@ Typical usage
         )
     )
 """
+
 from __future__ import annotations
 
 from platform.infrastructure.execution.adapter_base import (

@@ -9,17 +9,16 @@ Signals are emitted by strategies / AI modules (see :class:`Signal` ORM).
 The query returns the most recent N signals for the org, scoped by the
 optional strategy_id / symbol filters.
 """
+
 from __future__ import annotations
 
 from datetime import datetime
+from platform.db.models import Signal as SignalModel
+from platform.db.session import db_context
 from uuid import UUID
 
 from pydantic import BaseModel
 from sqlalchemy import select
-
-from platform.db.models import Signal as SignalModel
-from platform.db.session import db_context
-
 
 # ── Query + DTO ────────────────────────────────────────────────────────────
 

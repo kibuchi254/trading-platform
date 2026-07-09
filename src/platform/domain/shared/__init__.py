@@ -1,10 +1,11 @@
 """DDD primitives: Entity, ValueObject, AggregateRoot, DomainEvent, Repository protocol."""
+
 from __future__ import annotations
 
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 from typing import Generic, Protocol, TypeVar
 from uuid import UUID
 
@@ -30,13 +31,15 @@ class Entity:
 @dataclass
 class DomainEvent:
     """Marker base for domain events. Subclasses add payload."""
+
     event_id: UUID = field(default_factory=uuid.uuid4)
-    occurred_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    occurred_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 @dataclass
 class AggregateRoot(Entity):
     """Aggregate root with internal event queue for the EventBus to drain."""
+
     _events: list[DomainEvent] = field(default_factory=list, repr=False)
 
     def record_event(self, event: DomainEvent) -> None:
@@ -70,7 +73,7 @@ class Money(ValueObject):
         if self.amount < 0:
             raise ValueError("Money amount cannot be negative")
 
-    def __add__(self, other: "Money") -> "Money":
+    def __add__(self, other: Money) -> Money:
         if self.currency != other.currency:
             raise ValueError(f"Cannot add {self.currency} + {other.currency}")
         return Money(self.amount + other.amount, self.currency)
@@ -125,8 +128,15 @@ class Timeframe(ValueObject):
     @property
     def seconds(self) -> int:
         return {
-            "M1": 60, "M5": 300, "M15": 900, "M30": 1800,
-            "H1": 3600, "H4": 14400, "D1": 86400, "W1": 604800, "MN": 2592000,
+            "M1": 60,
+            "M5": 300,
+            "M15": 900,
+            "M30": 1800,
+            "H1": 3600,
+            "H4": 14400,
+            "D1": 86400,
+            "W1": 604800,
+            "MN": 2592000,
         }[self.code]
 
 
@@ -188,8 +198,21 @@ class RiskLimitBreached(DomainEvent):
 
 # Re-export for convenience
 __all__ = [
-    "ValueObject", "Entity", "AggregateRoot", "DomainEvent", "Repository",
-    "Money", "Price", "Quantity", "Symbol", "Timeframe",
-    "OrderPlaced", "OrderFilled", "PositionOpened", "PositionClosed",
-    "TerminalRegistered", "TerminalWentOffline", "RiskLimitBreached",
+    "AggregateRoot",
+    "DomainEvent",
+    "Entity",
+    "Money",
+    "OrderFilled",
+    "OrderPlaced",
+    "PositionClosed",
+    "PositionOpened",
+    "Price",
+    "Quantity",
+    "Repository",
+    "RiskLimitBreached",
+    "Symbol",
+    "TerminalRegistered",
+    "TerminalWentOffline",
+    "Timeframe",
+    "ValueObject",
 ]

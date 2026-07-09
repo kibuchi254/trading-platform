@@ -1,10 +1,8 @@
 """Test the market-data domain — Tick, OHLCBar, AggregatedBar, SymbolInfo."""
+
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
-
-import pytest
-
+from datetime import UTC, datetime, timedelta
 from platform.core.exceptions import DomainError
 from platform.domain.market_data import (
     AggregatedBar,
@@ -15,6 +13,7 @@ from platform.domain.market_data import (
 )
 from platform.domain.shared import Timeframe
 
+import pytest
 
 # ── Tick value object ────────────────────────────────────────────────────────
 
@@ -61,8 +60,7 @@ def test_symbol_info_point_derived_from_digits() -> None:
 
 def test_symbol_info_normalize_volume_snaps_to_step_grid() -> None:
     """Volumes are rounded to the nearest step and clamped to [min, max]."""
-    sym = SymbolInfo(name="XAUUSD", digits=2, volume_min=0.01, volume_step=0.01,
-                     volume_max=10.0)
+    sym = SymbolInfo(name="XAUUSD", digits=2, volume_min=0.01, volume_step=0.01, volume_max=10.0)
     assert sym.normalize_volume(0.137) == pytest.approx(0.14)
     assert sym.normalize_volume(0.001) == pytest.approx(0.01)  # clamp to min
     assert sym.normalize_volume(100.0) == pytest.approx(10.0)  # clamp to max
@@ -85,8 +83,9 @@ def test_symbol_info_rejects_negative_digits() -> None:
 
 def _make_bar() -> OHLCBar:
     return OHLCBar(
-        symbol="XAUUSD", timeframe=Timeframe(code="M1"),
-        ts=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        symbol="XAUUSD",
+        timeframe=Timeframe(code="M1"),
+        ts=datetime(2026, 1, 1, tzinfo=UTC),
     )
 
 
@@ -159,12 +158,14 @@ def test_aggregated_bar_first_tick_creates_current_bar() -> None:
     """The first tick opens a fresh current_bar."""
     agg = AggregatedBar(
         bucket=TimeframeBucket(
-            symbol="XAUUSD", timeframe=Timeframe(code="M1"),
-            bucket_start=datetime(2026, 1, 1, tzinfo=timezone.utc),
+            symbol="XAUUSD",
+            timeframe=Timeframe(code="M1"),
+            bucket_start=datetime(2026, 1, 1, tzinfo=UTC),
         )
     )
-    tick = Tick(symbol="XAUUSD", bid=2000.0, ask=2000.5,
-                ts=datetime(2026, 1, 1, 0, 0, 5, tzinfo=timezone.utc))
+    tick = Tick(
+        symbol="XAUUSD", bid=2000.0, ask=2000.5, ts=datetime(2026, 1, 1, 0, 0, 5, tzinfo=UTC)
+    )
     current, closed = agg.ingest(tick)
     assert current is not None
     assert current.open == pytest.approx(2000.25)
@@ -173,21 +174,21 @@ def test_aggregated_bar_first_tick_creates_current_bar() -> None:
 
 def test_aggregated_bar_rolls_when_bucket_boundary_crossed() -> None:
     """Crossing into a new timeframe bucket closes the old bar."""
-    bucket_start = datetime(2026, 1, 1, 0, 0, tzinfo=timezone.utc)
+    bucket_start = datetime(2026, 1, 1, 0, 0, tzinfo=UTC)
     agg = AggregatedBar(
         bucket=TimeframeBucket(
-            symbol="XAUUSD", timeframe=Timeframe(code="M1"),
+            symbol="XAUUSD",
+            timeframe=Timeframe(code="M1"),
             bucket_start=bucket_start,
         )
     )
     # First tick inside the first minute bucket.
-    agg.ingest(Tick(symbol="XAUUSD", bid=2000.0, ask=2000.5,
-                    ts=bucket_start + timedelta(seconds=10)))
+    agg.ingest(
+        Tick(symbol="XAUUSD", bid=2000.0, ask=2000.5, ts=bucket_start + timedelta(seconds=10))
+    )
     # Second tick in the NEXT minute bucket — triggers a roll.
     next_ts = bucket_start + timedelta(minutes=1, seconds=5)
-    current, closed = agg.ingest(
-        Tick(symbol="XAUUSD", bid=2010.0, ask=2010.5, ts=next_ts)
-    )
+    current, closed = agg.ingest(Tick(symbol="XAUUSD", bid=2010.0, ask=2010.5, ts=next_ts))
     assert closed is not None, "Expected previous bar to be closed on roll"
     assert closed.is_closed is True
     assert agg.last_closed_bar is closed
@@ -198,22 +199,23 @@ def test_aggregated_bar_rejects_tick_with_wrong_symbol() -> None:
     """Ticks whose symbol does not match the bucket are rejected."""
     agg = AggregatedBar(
         bucket=TimeframeBucket(
-            symbol="XAUUSD", timeframe=Timeframe(code="M1"),
-            bucket_start=datetime(2026, 1, 1, tzinfo=timezone.utc),
+            symbol="XAUUSD",
+            timeframe=Timeframe(code="M1"),
+            bucket_start=datetime(2026, 1, 1, tzinfo=UTC),
         )
     )
-    tick = Tick(symbol="EURUSD", bid=1.08, ask=1.0801,
-                ts=datetime(2026, 1, 1, 0, 0, 5, tzinfo=timezone.utc))
+    tick = Tick(symbol="EURUSD", bid=1.08, ask=1.0801, ts=datetime(2026, 1, 1, 0, 0, 5, tzinfo=UTC))
     with pytest.raises(DomainError):
         agg.ingest(tick)
 
 
 def test_aggregated_bar_multiple_ticks_in_same_bucket_accumulate() -> None:
     """Several ticks within the same bucket extend a single bar."""
-    bucket_start = datetime(2026, 1, 1, 0, 0, tzinfo=timezone.utc)
+    bucket_start = datetime(2026, 1, 1, 0, 0, tzinfo=UTC)
     agg = AggregatedBar(
         bucket=TimeframeBucket(
-            symbol="XAUUSD", timeframe=Timeframe(code="M1"),
+            symbol="XAUUSD",
+            timeframe=Timeframe(code="M1"),
             bucket_start=bucket_start,
         )
     )
@@ -221,8 +223,9 @@ def test_aggregated_bar_multiple_ticks_in_same_bucket_accumulate() -> None:
     # and lows are the mid prices.
     mids = [2000.25, 2010.25, 1995.25, 2005.25]
     for i, p in enumerate([2000.0, 2010.0, 1995.0, 2005.0]):
-        agg.ingest(Tick(symbol="XAUUSD", bid=p, ask=p + 0.5,
-                        ts=bucket_start + timedelta(seconds=10 * i)))
+        agg.ingest(
+            Tick(symbol="XAUUSD", bid=p, ask=p + 0.5, ts=bucket_start + timedelta(seconds=10 * i))
+        )
     assert agg.current_bar is not None
     assert agg.current_bar.tick_count == 4
     assert agg.current_bar.high == pytest.approx(max(mids))

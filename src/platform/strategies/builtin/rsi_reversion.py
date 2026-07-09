@@ -24,12 +24,12 @@ min_strength : float
 exit_threshold : int
     RSI midpoint used to optionally scale exit strength (default 50).
 """
+
 from __future__ import annotations
 
 from collections import deque
-from typing import Any
-
 from platform.strategies.sdk import Bar, Signal, Strategy, StrategyContext, strategy
+from typing import Any
 
 
 def rsi(prices: list[float], period: int) -> list[float]:
@@ -129,7 +129,11 @@ class RSIReversionStrategy(Strategy):
 
         # Bearish mean-reversion: RSI was above overbought, now crosses back down
         if prev_rsi >= self.overbought and cur_rsi < self.overbought:
-            depth = (prev_rsi - self.overbought) / (100 - self.overbought) if self.overbought < 100 else 0.0
+            depth = (
+                (prev_rsi - self.overbought) / (100 - self.overbought)
+                if self.overbought < 100
+                else 0.0
+            )
             strength = min(1.0, 0.5 + depth * 0.5)
             if strength < self.min_strength:
                 return None

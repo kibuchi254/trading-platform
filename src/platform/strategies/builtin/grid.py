@@ -25,11 +25,11 @@ base_volume : float
 take_profit_pct : float
     Take-profit distance from each fill (default 0.003 = 0.3%).
 """
+
 from __future__ import annotations
 
-from typing import Any
-
 from platform.strategies.sdk import Bar, Signal, Strategy, StrategyContext, strategy
+from typing import Any
 
 
 @strategy
@@ -112,7 +112,12 @@ class GridStrategy(Strategy):
                     strength=0.7,
                     suggested_volume=self.base_volume,
                     suggested_take_profit=self._levels[k] * (1.0 - self.take_profit_pct),
-                    meta={"grid_level": k, "anchor": self._anchor, "price": self._levels[k], "tf": bar.timeframe},
+                    meta={
+                        "grid_level": k,
+                        "anchor": self._anchor,
+                        "price": self._levels[k],
+                        "tf": bar.timeframe,
+                    },
                 )
 
         # Crossed downward through one or more levels — emit BUY
@@ -129,6 +134,11 @@ class GridStrategy(Strategy):
                     strength=0.7,
                     suggested_volume=self.base_volume,
                     suggested_take_profit=self._levels[k] * (1.0 + self.take_profit_pct),
-                    meta={"grid_level": k, "anchor": self._anchor, "price": self._levels[k], "tf": bar.timeframe},
+                    meta={
+                        "grid_level": k,
+                        "anchor": self._anchor,
+                        "price": self._levels[k],
+                        "tf": bar.timeframe,
+                    },
                 )
         return None

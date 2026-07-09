@@ -25,13 +25,13 @@ If any of those conditions fail, the probe returns
 will stop sending traffic. Liveness always returns 200 with a timestamp
 so the orchestrator knows the loop is responsive.
 """
+
 from __future__ import annotations
 
 import time
-from datetime import datetime, timezone
-from typing import Any
-
+from datetime import UTC, datetime
 from platform.core.logging import get_logger
+from typing import Any
 
 _log = get_logger(__name__)
 
@@ -62,7 +62,7 @@ class ReadinessProbe:
         """
         return {
             "alive": True,
-            "ts": datetime.now(timezone.utc).isoformat(),
+            "ts": datetime.now(UTC).isoformat(),
         }
 
     # ── Readiness ───────────────────────────────────────────────────────
@@ -96,7 +96,7 @@ class ReadinessProbe:
             "ready": ready,
             "checks": checks,
             "elapsed_ms": round(elapsed_ms, 2),
-            "ts": datetime.now(timezone.utc).isoformat(),
+            "ts": datetime.now(UTC).isoformat(),
         }
 
     # ── Individual checks ───────────────────────────────────────────────
@@ -105,9 +105,9 @@ class ReadinessProbe:
         """Run ``SELECT 1`` and record the result."""
         start = time.monotonic()
         try:
-            from sqlalchemy import text
-
             from platform.db.session import db_context
+
+            from sqlalchemy import text
 
             async with db_context() as session:
                 value = (await session.execute(text("SELECT 1"))).scalar_one_or_none()
@@ -119,7 +119,7 @@ class ReadinessProbe:
                 "detail": "SELECT 1 succeeded" if ok else f"unexpected scalar: {value!r}",
             }
             return ok
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             latency_ms = (time.monotonic() - start) * 1000.0
             out["database"] = {
                 "ok": False,
@@ -132,9 +132,9 @@ class ReadinessProbe:
         """Run ``PING`` against the configured Redis URL."""
         start = time.monotonic()
         try:
-            import redis.asyncio as aioredis
-
             from platform.core.config import get_settings
+
+            import redis.asyncio as aioredis
 
             settings = get_settings()
             client = aioredis.from_url(settings.redis_url, decode_responses=True)
@@ -149,7 +149,7 @@ class ReadinessProbe:
                 "detail": "PING ok" if pong else "PING returned False",
             }
             return bool(pong)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             latency_ms = (time.monotonic() - start) * 1000.0
             out["redis"] = {
                 "ok": False,
@@ -180,13 +180,13 @@ class ReadinessProbe:
                 "latency_ms": round(latency_ms, 2),
                 "detail": (
                     f"{count} terminal(s) online (min {self.min_terminals})"
-                    if ok else
-                    f"only {count} terminal(s) online (min {self.min_terminals})"
+                    if ok
+                    else f"only {count} terminal(s) online (min {self.min_terminals})"
                 ),
                 "terminals_online": count,
             }
             return ok
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             latency_ms = (time.monotonic() - start) * 1000.0
             out["bridge"] = {
                 "ok": False,

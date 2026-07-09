@@ -4,24 +4,24 @@ Posts to a Discord channel via an incoming webhook URL. The webhook is
 per-channel (one URL → one channel), so the ``to`` argument is accepted
 for API parity but ignored.
 """
+
 from __future__ import annotations
 
 import asyncio
+from platform.core.config import get_settings
+from platform.core.logging import get_logger
+from platform.notifications.base import NotificationChannel
 from typing import Any
 
 import httpx
 
-from platform.core.config import get_settings
-from platform.core.logging import get_logger
-from platform.notifications.base import NotificationChannel
-
 _log = get_logger(__name__)
 
 # Discord embed colors (decimal RGB).
-_COLOR_GREEN: int = 0x2ECC71   # success
-_COLOR_RED: int = 0xE74C3C     # error / critical
-_COLOR_AMBER: int = 0xF1C40F   # warning
-_COLOR_BLUE: int = 0x3498DB    # info / default
+_COLOR_GREEN: int = 0x2ECC71  # success
+_COLOR_RED: int = 0xE74C3C  # error / critical
+_COLOR_AMBER: int = 0xF1C40F  # warning
+_COLOR_BLUE: int = 0x3498DB  # info / default
 
 # Discord embed length limits.
 _EMBED_TITLE_MAX: int = 256
@@ -91,7 +91,7 @@ class DiscordChannel(NotificationChannel):
         payload = self._build_payload(subject, body, color)
         try:
             return await self._post_with_rate_limit(payload)
-        except Exception:  # noqa: BLE001
+        except Exception:
             _log.exception("discord_send_error")
             return False
 
@@ -152,7 +152,7 @@ class DiscordChannel(NotificationChannel):
             for attempt in range(3):
                 try:
                     resp = await client.post(self._webhook_url, json=payload)
-                except Exception:  # noqa: BLE001
+                except Exception:
                     _log.exception("discord_post_error", attempt=attempt)
                     return False
 
@@ -214,5 +214,5 @@ class DiscordChannel(NotificationChannel):
         try:
             data = resp.json()
             return float(data.get("retry_after", 1.0))
-        except Exception:  # noqa: BLE001
+        except Exception:
             return 1.0

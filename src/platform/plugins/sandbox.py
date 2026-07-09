@@ -26,28 +26,29 @@ The sandbox is deliberately conservative. When in doubt, reject. A
 false negative (rejecting safe code) is an annoyance; a false positive
 (letting unsafe code through) is a security incident.
 """
+
 from __future__ import annotations
 
 import ast
 import asyncio
-import re
-from typing import Any
-
 from platform.core.logging import get_logger
+from typing import Any
 
 _log = get_logger(__name__)
 
 # Whitelisted top-level imports. Anything else is rejected at validation
 # time. ``platform.strategies.sdk`` is the canonical strategy SDK.
-ALLOWED_IMPORTS: frozenset[str] = frozenset({
-    "numpy",
-    "pandas",
-    "math",
-    "statistics",
-    "datetime",
-    "collections",
-    "platform.strategies.sdk",
-})
+ALLOWED_IMPORTS: frozenset[str] = frozenset(
+    {
+        "numpy",
+        "pandas",
+        "math",
+        "statistics",
+        "datetime",
+        "collections",
+        "platform.strategies.sdk",
+    }
+)
 
 # Forbidden substrings — any match rejects the source outright. These are
 # intentionally broad: even ``import os`` is blocked because ``os`` exposes
@@ -72,6 +73,7 @@ FORBIDDEN_PATTERNS: tuple[str, ...] = (
     "import asyncio.ensure_future",  # block async-escape primitives
 )
 
+
 # Minimal builtins available to sandboxed code. We omit ``eval``, ``exec``,
 # ``compile``, ``open``, ``globals``, ``locals``, ``vars``, ``dir``,
 # ``getattr`` with default, ``breakpoint``. A restricted ``__import__`` is
@@ -85,38 +87,78 @@ def _make_restricted_import():
         # Allow the whitelisted top-level module or any submodule of one.
         top = name.split(".", 1)[0]
         allowed_top = any(
-            name == allowed or name.startswith(allowed + ".")
-            or top == allowed
+            name == allowed or name.startswith(allowed + ".") or top == allowed
             for allowed in ALLOWED_IMPORTS
         )
         if not allowed_top:
-            raise ImportError(
-                f"Sandbox refused to import {name!r} — not in ALLOWED_IMPORTS"
-            )
+            raise ImportError(f"Sandbox refused to import {name!r} — not in ALLOWED_IMPORTS")
         return importlib.import_module(name)
+
     return _restricted_import
 
 
 SAFE_BUILTINS: dict[str, Any] = {
-    "abs": abs, "all": all, "any": any, "bin": bin, "bool": bool,
-    "bytearray": bytearray, "bytes": bytes, "callable": callable,
-    "chr": chr, "complex": complex, "dict": dict, "divmod": divmod,
-    "enumerate": enumerate, "filter": filter, "float": float,
-    "format": format, "frozenset": frozenset, "hash": hash,
-    "hex": hex, "int": int, "isinstance": isinstance, "issubclass": issubclass,
-    "iter": iter, "len": len, "list": list, "map": map, "max": max,
-    "min": min, "next": next, "object": object, "oct": oct,
-    "ord": ord, "pow": pow, "print": print, "range": range,
-    "repr": repr, "reversed": reversed, "round": round, "set": set,
-    "slice": slice, "sorted": sorted, "str": str, "sum": sum,
-    "tuple": tuple, "type": type, "zip": zip,
-    "True": True, "False": False, "None": None,
-    "AttributeError": AttributeError, "KeyError": KeyError,
-    "IndexError": IndexError, "TypeError": TypeError,
-    "ValueError": ValueError, "ZeroDivisionError": ZeroDivisionError,
-    "StopIteration": StopIteration, "NameError": NameError,
-    "NotImplementedError": NotImplementedError, "Exception": Exception,
-    "RuntimeError": RuntimeError, "ArithmeticError": ArithmeticError,
+    "abs": abs,
+    "all": all,
+    "any": any,
+    "bin": bin,
+    "bool": bool,
+    "bytearray": bytearray,
+    "bytes": bytes,
+    "callable": callable,
+    "chr": chr,
+    "complex": complex,
+    "dict": dict,
+    "divmod": divmod,
+    "enumerate": enumerate,
+    "filter": filter,
+    "float": float,
+    "format": format,
+    "frozenset": frozenset,
+    "hash": hash,
+    "hex": hex,
+    "int": int,
+    "isinstance": isinstance,
+    "issubclass": issubclass,
+    "iter": iter,
+    "len": len,
+    "list": list,
+    "map": map,
+    "max": max,
+    "min": min,
+    "next": next,
+    "object": object,
+    "oct": oct,
+    "ord": ord,
+    "pow": pow,
+    "print": print,
+    "range": range,
+    "repr": repr,
+    "reversed": reversed,
+    "round": round,
+    "set": set,
+    "slice": slice,
+    "sorted": sorted,
+    "str": str,
+    "sum": sum,
+    "tuple": tuple,
+    "type": type,
+    "zip": zip,
+    "True": True,
+    "False": False,
+    "None": None,
+    "AttributeError": AttributeError,
+    "KeyError": KeyError,
+    "IndexError": IndexError,
+    "TypeError": TypeError,
+    "ValueError": ValueError,
+    "ZeroDivisionError": ZeroDivisionError,
+    "StopIteration": StopIteration,
+    "NameError": NameError,
+    "NotImplementedError": NotImplementedError,
+    "Exception": Exception,
+    "RuntimeError": RuntimeError,
+    "ArithmeticError": ArithmeticError,
     "LookupError": LookupError,
     # Restricted __import__ — only resolves whitelisted modules.
     "__import__": _make_restricted_import(),
@@ -190,7 +232,7 @@ class StrategySandbox:
             compile(source_code, "<sandbox>", "exec")
         except SyntaxError as exc:
             return False, f"Compile error: {exc.msg} (line {exc.lineno})"
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             return False, f"Compile error: {exc.__class__.__name__}: {exc}"
 
         return True, ""
@@ -240,7 +282,7 @@ class StrategySandbox:
             from platform.strategies.sdk import Strategy  # noqa: F401
 
             sdk_module = __import__("platform.strategies.sdk", fromlist=["*"])
-        except Exception:  # noqa: BLE001
+        except Exception:
             _log.exception("strategy_sdk_import_failed")
             return None
 
@@ -268,18 +310,17 @@ class StrategySandbox:
         # Expose the platform.strategies submodule so user code can do
         # ``from platform.strategies.sdk import Strategy``.
         import importlib
+
         try:
-            namespace["platform"].strategies = importlib.import_module(
-                "platform.strategies"
-            )
+            namespace["platform"].strategies = importlib.import_module("platform.strategies")
         except ImportError:
             _log.warning("strategy_sdk_submodule_unavailable")
 
         # Execute the user's code in the restricted namespace.
         try:
             compiled = compile(source_code, f"<sandbox:{name}>", "exec")
-            exec(compiled, namespace)  # noqa: S102 — intentional, sandboxed
-        except Exception as exc:  # noqa: BLE001
+            exec(compiled, namespace)
+        except Exception as exc:
             _log.warning("strategy_sandbox_exec_failed", name=name, error=str(exc))
             return None
 
@@ -305,7 +346,7 @@ class StrategySandbox:
         # we don't collide with built-ins.
         try:
             strategy_cls.name = name  # type: ignore[attr-defined]
-        except Exception:  # noqa: BLE001
+        except Exception:
             pass
 
         # Wrap on_bar with a CPU budget so a runaway strategy can't
@@ -316,7 +357,7 @@ class StrategySandbox:
         try:
             registry = get_strategy_registry()
             registry.register(strategy_cls)
-        except Exception:  # noqa: BLE001
+        except Exception:
             _log.exception("strategy_sandbox_register_failed", name=name)
             return None
 

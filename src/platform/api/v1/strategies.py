@@ -1,17 +1,17 @@
 """Strategies REST router — CRUD + activate/deactivate."""
+
 from __future__ import annotations
 
+from platform.core.dependencies import CurrentUser, get_current_user
+from platform.db.models import Strategy
+from platform.db.session import get_db
+from platform.strategies.sdk import get_strategy_registry
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from platform.core.dependencies import CurrentUser, get_current_user
-from platform.db.models import Strategy
-from platform.db.session import get_db
-from platform.strategies.sdk import get_strategy_registry
 
 router = APIRouter(prefix="/strategies", tags=["strategies"])
 
@@ -54,13 +54,17 @@ async def create_strategy(
     db: AsyncSession = Depends(get_db),
 ) -> StrategyOut:
     s = Strategy(
-        org_id=user.org_id, name=req.name, slug=req.slug, kind=req.kind,
-        config=req.config, description=req.description,
+        org_id=user.org_id,
+        name=req.name,
+        slug=req.slug,
+        kind=req.kind,
+        config=req.config,
+        description=req.description,
     )
     db.add(s)
     try:
         await db.commit()
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         await db.rollback()
         raise HTTPException(status_code=409, detail=str(e)) from e
     await db.refresh(s)

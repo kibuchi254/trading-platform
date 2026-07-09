@@ -1,10 +1,11 @@
 """Admin REST router — org management, user management, system metrics."""
+
 from __future__ import annotations
+
+from platform.core.dependencies import CurrentUser, require_role
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
-
-from platform.core.dependencies import CurrentUser, require_role
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 

@@ -14,10 +14,10 @@ edge of a volatility spike.
 ATR is supplied externally via :meth:`update_atr` (typically a bar-close
 subscriber); the rule itself never queries the candle table.
 """
+
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
-
+from datetime import UTC, datetime, timedelta
 from platform.core.exceptions import RiskLimitBreached
 from platform.core.logging import get_logger
 from platform.risk.engine import OrderContext, RiskRule
@@ -67,7 +67,7 @@ class VolatilityLockRule(RiskRule):
         """
         self._atr[symbol] = (float(atr), float(price))
         if price > 0 and (atr / price) > self.max_atr_pct:
-            self._cooldowns[symbol] = datetime.now(timezone.utc) + self.cooldown
+            self._cooldowns[symbol] = datetime.now(UTC) + self.cooldown
             _log.warning(
                 "volatility_lock_triggered",
                 symbol=symbol,
@@ -84,7 +84,7 @@ class VolatilityLockRule(RiskRule):
             If the symbol is currently in cooldown, or its latest ATR%
             exceeds ``max_atr_pct``.
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         # Cooldown check — supersedes the live ATR check.
         until = self._cooldowns.get(ctx.symbol)
@@ -111,8 +111,7 @@ class VolatilityLockRule(RiskRule):
             # Fresh spike — start cooldown and reject.
             self._cooldowns[ctx.symbol] = now + self.cooldown
             raise RiskLimitBreached(
-                f"volatility_lock: {ctx.symbol} ATR%={atr_pct:.4f} "
-                f"(cap {self.max_atr_pct:.4f})"
+                f"volatility_lock: {ctx.symbol} ATR%={atr_pct:.4f} (cap {self.max_atr_pct:.4f})"
             )
 
         _log.debug(

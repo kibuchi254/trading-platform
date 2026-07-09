@@ -31,12 +31,12 @@ reversal_confirmation : int
 min_strength : float
     Minimum signal strength threshold.
 """
+
 from __future__ import annotations
 
 from collections import deque
-from typing import Any
-
 from platform.strategies.sdk import Bar, Signal, Strategy, StrategyContext, strategy
+from typing import Any
 
 
 def find_swings(bars: list[Bar], lookback: int) -> tuple[list[float], list[float]]:
@@ -52,9 +52,15 @@ def find_swings(bars: list[Bar], lookback: int) -> tuple[list[float], list[float
     n = len(bars)
     for i in range(half, n - half):
         window = bars[i - half : i + half + 1]
-        if bars[i].high == max(b.high for b in window) and sum(1 for b in window if b.high == bars[i].high) == 1:
+        if (
+            bars[i].high == max(b.high for b in window)
+            and sum(1 for b in window if b.high == bars[i].high) == 1
+        ):
             swing_highs.append(bars[i].high)
-        if bars[i].low == min(b.low for b in window) and sum(1 for b in window if b.low == bars[i].low) == 1:
+        if (
+            bars[i].low == min(b.low for b in window)
+            and sum(1 for b in window if b.low == bars[i].low) == 1
+        ):
             swing_lows.append(bars[i].low)
     return swing_highs, swing_lows
 
@@ -100,8 +106,8 @@ class LiquiditySweepStrategy(Strategy):
         if self._pending is not None:
             kind, extreme, count = self._pending
             count += 1
-            still_valid = (
-                (kind == "bull" and bar.close > extreme) or (kind == "bear" and bar.close < extreme)
+            still_valid = (kind == "bull" and bar.close > extreme) or (
+                kind == "bear" and bar.close < extreme
             )
             if not still_valid:
                 self._pending = None
@@ -119,7 +125,12 @@ class LiquiditySweepStrategy(Strategy):
                     strength=strength,
                     suggested_stop_loss=sl,
                     suggested_take_profit=tp,
-                    meta={"sweep": kind, "swing_extreme": extreme, "confirmations": count, "tf": bar.timeframe},
+                    meta={
+                        "sweep": kind,
+                        "swing_extreme": extreme,
+                        "confirmations": count,
+                        "tf": bar.timeframe,
+                    },
                 )
             else:
                 self._pending = (kind, extreme, count)

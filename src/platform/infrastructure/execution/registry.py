@@ -27,11 +27,11 @@ at import time:
 Use :func:`get_adapter_registry` to obtain the process-wide singleton; it
 is pre-populated with the two built-in adapters above.
 """
+
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import Any, Callable
-
+from collections.abc import Callable
+from datetime import UTC, datetime
 from platform.core.logging import get_logger
 from platform.infrastructure.execution.adapter_base import (
     AccountSnapshot,
@@ -43,6 +43,7 @@ from platform.infrastructure.execution.adapter_base import (
 from platform.infrastructure.execution.paper_broker import PaperBrokerAdapter
 from platform.infrastructure.mt5_bridge.client import BridgeClient
 from platform.infrastructure.mt5_bridge.protocol import BridgeMessage
+from typing import Any
 
 _log = get_logger(__name__)
 
@@ -53,15 +54,15 @@ _log = get_logger(__name__)
 def _parse_dt(raw: Any) -> datetime:
     """Parse a datetime from a string, datetime, or None — fallback to now."""
     if raw is None:
-        return datetime.now(timezone.utc)
+        return datetime.now(UTC)
     if isinstance(raw, datetime):
         return raw
     if isinstance(raw, str):
         try:
             return datetime.fromisoformat(raw.replace("Z", "+00:00"))
         except ValueError:
-            return datetime.now(timezone.utc)
-    return datetime.now(timezone.utc)
+            return datetime.now(UTC)
+    return datetime.now(UTC)
 
 
 def _execution_report_from_reply(
@@ -243,7 +244,7 @@ class BridgeClientAdapter(ExecutionAdapter):
         # POSITION_MODIFIED replies don't fit the ExecutionReport shape;
         # we return a synthetic ``accepted`` report so the caller knows the
         # modification was acknowledged.
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         return ExecutionReport(
             client_order_id=reply.payload.get("client_order_id", f"modify-{broker_position_id}"),
             broker_order_id=reply.payload.get("broker_order_id"),
@@ -257,17 +258,13 @@ class BridgeClientAdapter(ExecutionAdapter):
 
     async def sync_positions(self) -> list[PositionSnapshot]:
         """Pull all open positions from the bound terminal."""
-        reply = await self._client.sync_positions(
-            terminal_id=self.terminal_id, timeout=30.0
-        )
+        reply = await self._client.sync_positions(terminal_id=self.terminal_id, timeout=30.0)
         rows = reply.payload.get("positions", []) if reply.payload else []
         return [_position_from_payload(rp) for rp in rows]
 
     async def sync_account(self) -> AccountSnapshot:
         """Pull the account snapshot from the bound terminal."""
-        reply = await self._client.sync_account(
-            terminal_id=self.terminal_id, timeout=self._timeout
-        )
+        reply = await self._client.sync_account(terminal_id=self.terminal_id, timeout=self._timeout)
         p = reply.payload or {}
         return AccountSnapshot(
             balance=float(p.get("balance", 0) or 0),
@@ -355,8 +352,7 @@ class ExecutionAdapterRegistry:
         except KeyError:
             available = ", ".join(sorted(self._factories)) or "<none>"
             raise KeyError(
-                f"Unknown execution adapter kind: {kind!r}. "
-                f"Registered kinds: {available}"
+                f"Unknown execution adapter kind: {kind!r}. Registered kinds: {available}"
             ) from None
         return factory(**kwargs)
 

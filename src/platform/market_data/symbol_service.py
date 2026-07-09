@@ -10,15 +10,15 @@ symbols it can trade; ``update_from_terminal`` syncs that list into the
 ``symbols`` table, upserting rows for any new names and refreshing metadata
 (digits, volume_min, …) for known ones.
 """
+
 from __future__ import annotations
-
-from typing import Any
-
-from sqlalchemy import select
 
 from platform.core.logging import get_logger
 from platform.db.models import Symbol, Terminal
 from platform.db.session import db_context
+from typing import Any
+
+from sqlalchemy import select
 
 _log = get_logger(__name__)
 
@@ -105,9 +105,7 @@ class SymbolService:
             self._cache.setdefault(r.name, r)
         return rows
 
-    async def update_from_terminal(
-        self, terminal_id: str, symbols: list[dict[str, Any]]
-    ) -> int:
+    async def update_from_terminal(self, terminal_id: str, symbols: list[dict[str, Any]]) -> int:
         """Sync a terminal's advertised symbol list into the ``symbols`` table.
 
         Resolves the terminal's ``broker_id`` (and ``org_id``) from the
@@ -139,10 +137,7 @@ class SymbolService:
                 name = entry.get("name")
                 if not name:
                     continue
-                stmt = (
-                    select(Symbol)
-                    .where(Symbol.name == name, Symbol.broker_id == broker_id)
-                )
+                stmt = select(Symbol).where(Symbol.name == name, Symbol.broker_id == broker_id)
                 existing = (await db.execute(stmt)).scalar_one_or_none()
                 fields = {
                     "broker_id": broker_id,
@@ -174,7 +169,9 @@ class SymbolService:
 
         _log.info(
             "symbols_synced_from_terminal",
-            terminal_id=terminal_id, total=len(symbols), created=created,
+            terminal_id=terminal_id,
+            total=len(symbols),
+            created=created,
         )
         return created
 

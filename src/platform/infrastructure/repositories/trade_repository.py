@@ -5,15 +5,15 @@ The repository therefore exposes `add` (insert) but no `save` (no updates).
 The headline method is `performance_summary` which folds the closed-trade
 stream into the KPIs shown on the analytics dashboard.
 """
+
 from __future__ import annotations
 
 from datetime import datetime
+from platform.db.models import Trade as TradeModel
 from uuid import UUID
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from platform.db.models import Trade as TradeModel
 
 
 class TradeRepository:
@@ -41,8 +41,12 @@ class TradeRepository:
         return await self.db.get(TradeModel, id)
 
     async def list_by_org(
-        self, org_id: UUID, *, symbol: str | None = None,
-        limit: int = 200, offset: int = 0,
+        self,
+        org_id: UUID,
+        *,
+        symbol: str | None = None,
+        limit: int = 200,
+        offset: int = 0,
     ) -> list[TradeModel]:
         stmt = select(TradeModel).where(TradeModel.org_id == org_id)
         if symbol:
@@ -51,7 +55,10 @@ class TradeRepository:
         return list((await self.db.execute(stmt)).scalars().all())
 
     async def list_by_strategy(
-        self, strategy_id: UUID, *, limit: int = 200,
+        self,
+        strategy_id: UUID,
+        *,
+        limit: int = 200,
     ) -> list[TradeModel]:
         stmt = (
             select(TradeModel)
@@ -62,7 +69,11 @@ class TradeRepository:
         return list((await self.db.execute(stmt)).scalars().all())
 
     async def list_by_symbol(
-        self, org_id: UUID, symbol: str, *, limit: int = 200,
+        self,
+        org_id: UUID,
+        symbol: str,
+        *,
+        limit: int = 200,
     ) -> list[TradeModel]:
         stmt = (
             select(TradeModel)
@@ -82,7 +93,9 @@ class TradeRepository:
     # ── Aggregations ────────────────────────────────────────────────────────
 
     async def performance_summary(
-        self, org_id: UUID, since: datetime,
+        self,
+        org_id: UUID,
+        since: datetime,
     ) -> dict[str, float | int | None]:
         """Fold closed trades for `org_id` since `since` into KPI metrics.
 
@@ -90,7 +103,8 @@ class TradeRepository:
         avg_duration (seconds). Wins are trades with pnl > 0.
         """
         base = select(TradeModel).where(
-            TradeModel.org_id == org_id, TradeModel.closed_at >= since,
+            TradeModel.org_id == org_id,
+            TradeModel.closed_at >= since,
         )
 
         count_stmt = select(func.count()).select_from(base.subquery())
@@ -98,8 +112,13 @@ class TradeRepository:
 
         if total_trades == 0:
             return {
-                "total_trades": 0, "win_rate": 0.0, "total_pnl": 0.0,
-                "avg_pnl": 0.0, "best": None, "worst": None, "avg_duration": 0.0,
+                "total_trades": 0,
+                "win_rate": 0.0,
+                "total_pnl": 0.0,
+                "avg_pnl": 0.0,
+                "best": None,
+                "worst": None,
+                "avg_duration": 0.0,
             }
 
         agg_stmt = select(

@@ -1,4 +1,5 @@
 """Pytest configuration — make `platform` importable + provide common fixtures."""
+
 from __future__ import annotations
 
 import os
@@ -25,6 +26,7 @@ import pytest
 def local_only_bus(monkeypatch):
     """Force the EventBus to operate in local-only mode (no Redis)."""
     import platform.events.bus as bus_mod
+
     original = bus_mod.EventBus
 
     class LocalEventBus(original):
@@ -43,6 +45,7 @@ def local_only_bus(monkeypatch):
 def clean_registry():
     """Clear the TerminalRegistry singleton between tests."""
     import platform.infrastructure.mt5_bridge.registry as reg_mod
+
     reg_mod._registry = None
     yield
     reg_mod._registry = None
@@ -52,6 +55,7 @@ def clean_registry():
 def clean_risk_engine():
     """Reset the RiskEngine singleton between tests."""
     import platform.risk.engine as risk_mod
+
     risk_mod._engine = None
     yield
     risk_mod._engine = None

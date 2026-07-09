@@ -6,26 +6,24 @@
 
 This file shows the pattern. Every other use case follows the same shape.
 """
+
 from __future__ import annotations
 
 import uuid
-from dataclasses import dataclass
-from datetime import datetime, timezone
-from uuid import UUID
-
-from pydantic import BaseModel, Field
-
-from platform.core.exceptions import RiskLimitBreached, ValidationError
+from datetime import UTC, datetime
+from platform.core.exceptions import ValidationError
 from platform.core.logging import get_logger
+from platform.db.models import Order as OrderModel
+from platform.db.models import Terminal
 from platform.db.session import db_context
 from platform.domain.shared import Price, Quantity
 from platform.domain.trading import Order, OrderSide, OrderStatus, OrderType
 from platform.infrastructure.mt5_bridge.client import get_bridge_client
-from platform.infrastructure.mt5_bridge.protocol import EventType
 from platform.risk.engine import get_risk_engine
-from sqlalchemy import select
+from uuid import UUID
 
-from platform.db.models import Order as OrderModel, Terminal
+from pydantic import BaseModel
+from sqlalchemy import select
 
 _log = get_logger(__name__)
 
@@ -111,7 +109,9 @@ async def handle_place_order(cmd: PlaceOrderCommand) -> PlaceOrderResult:
         # Resolve internal terminal id from external terminal_id
         terminal = (
             await db.execute(
-                select(Terminal).where(Terminal.terminal_id == cmd.terminal_id, Terminal.org_id == cmd.org_id)
+                select(Terminal).where(
+                    Terminal.terminal_id == cmd.terminal_id, Terminal.org_id == cmd.org_id
+                )
             )
         ).scalar_one_or_none()
         if terminal is None:
@@ -152,7 +152,7 @@ async def handle_place_order(cmd: PlaceOrderCommand) -> PlaceOrderResult:
             comment=cmd.comment,
             magic=cmd.magic,
         )
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         # Mark order as rejected in DB
         async with db_context() as db:
             db_order = await db.get(OrderModel, order_id)
@@ -180,12 +180,10 @@ async def handle_place_order(cmd: PlaceOrderCommand) -> PlaceOrderResult:
                 db_order.avg_fill_price = float(avg_price)
             db_order.rejection_reason = rejection
             if final_status in (OrderStatus.FILLED.value, OrderStatus.PARTIAL.value):
-                db_order.filled_at = datetime.now(timezone.utc)
+                db_order.filled_at = datetime.now(UTC)
             await db.commit()
 
-    ORDERS_PLACED.labels(
-        terminal_id=cmd.terminal_id, symbol=cmd.symbol, side=cmd.side
-    ).inc()
+    ORDERS_PLACED.labels(terminal_id=cmd.terminal_id, symbol=cmd.symbol, side=cmd.side).inc()
 
     return PlaceOrderResult(
         order_id=order_id,

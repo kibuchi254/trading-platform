@@ -9,14 +9,10 @@ The bridge client forwards the ``SUBSCRIBE_TICKS`` command to the terminal;
 the terminal then starts streaming ticks for the requested symbols (see
 ``Topic.TICKS`` subscribers for the ingestion path).
 """
+
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from uuid import UUID
-
-from pydantic import BaseModel
-from sqlalchemy import select
-
+from datetime import UTC, datetime
 from platform.core.exceptions import NotFoundError, ValidationError
 from platform.core.logging import get_logger
 from platform.db.models import Terminal
@@ -24,6 +20,10 @@ from platform.db.session import db_context
 from platform.events.bus import get_event_bus
 from platform.events.topics import Topic
 from platform.infrastructure.mt5_bridge.client import get_bridge_client
+from uuid import UUID
+
+from pydantic import BaseModel
+from sqlalchemy import select
 
 _log = get_logger(__name__)
 
@@ -90,7 +90,7 @@ async def handle_subscribe_ticks(cmd: SubscribeTicksCommand) -> SubscribeTicksRe
                 current_set.add(sym)
                 newly_added.append(sym)
         terminal.symbols = current
-        terminal.updated_at = datetime.now(timezone.utc)
+        terminal.updated_at = datetime.now(UTC)
         await db.commit()
 
     await get_event_bus().publish(

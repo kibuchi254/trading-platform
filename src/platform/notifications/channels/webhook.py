@@ -5,18 +5,18 @@ Designed for integrating ATLAS notifications into external automation
 Unlike the dedicated channels (email/telegram/discord) this channel is
 URL-agnostic and lets the recipient decide how to render the payload.
 """
+
 from __future__ import annotations
 
 import hashlib
 import hmac
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from platform.core.logging import get_logger
+from platform.notifications.base import NotificationChannel
 from typing import Any
 
 import httpx
-
-from platform.core.logging import get_logger
-from platform.notifications.base import NotificationChannel
 
 _log = get_logger(__name__)
 
@@ -110,7 +110,7 @@ class WebhookChannel(NotificationChannel):
         try:
             async with httpx.AsyncClient(timeout=self._timeout) as client:
                 resp = await client.post(url, content=raw, headers=headers)
-        except Exception:  # noqa: BLE001
+        except Exception:
             _log.exception("webhook_post_error", url=url)
             return False
 
@@ -142,7 +142,7 @@ class WebhookChannel(NotificationChannel):
         return {
             "subject": subject,
             "body": body,
-            "ts": datetime.now(timezone.utc).isoformat(),
+            "ts": datetime.now(UTC).isoformat(),
             "priority": priority,
             "meta": meta or {},
         }

@@ -5,16 +5,16 @@ aggregate. `password_hash` is opaque to the repository — hashing / verificatio
 live in `platform.core.security`. Soft-delete is honoured: rows with
 `deleted_at` set are invisible to all reads.
 """
+
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from platform.db.models import User as UserModel
+from platform.domain.identity import Email, User, UserRole
 from uuid import UUID
 
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from platform.db.models import User as UserModel
-from platform.domain.identity import Email, User, UserRole
 
 
 class UserRepository:
@@ -64,15 +64,21 @@ class UserRepository:
 
     async def get_by_email(self, email: str) -> User | None:
         stmt = select(UserModel).where(
-            UserModel.email == email.lower(), UserModel.deleted_at.is_(None),
+            UserModel.email == email.lower(),
+            UserModel.deleted_at.is_(None),
         )
         m = (await self.db.execute(stmt)).scalar_one_or_none()
         return self.to_domain(m) if m else None
 
     async def list_by_org(self, org_id: UUID) -> list[User]:
-        stmt = select(UserModel).where(
-            UserModel.org_id == org_id, UserModel.deleted_at.is_(None),
-        ).order_by(UserModel.created_at.desc())
+        stmt = (
+            select(UserModel)
+            .where(
+                UserModel.org_id == org_id,
+                UserModel.deleted_at.is_(None),
+            )
+            .order_by(UserModel.created_at.desc())
+        )
         rows = (await self.db.execute(stmt)).scalars().all()
         return [self.to_domain(r) for r in rows]
 
@@ -97,11 +103,16 @@ class UserRepository:
         return entity
 
     async def update_last_login(self, id: UUID) -> bool:
-        stmt = update(UserModel).where(
-            UserModel.id == id, UserModel.deleted_at.is_(None),
-        ).values(
-            last_login_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
+        stmt = (
+            update(UserModel)
+            .where(
+                UserModel.id == id,
+                UserModel.deleted_at.is_(None),
+            )
+            .values(
+                last_login_at=datetime.now(UTC),
+                updated_at=datetime.now(UTC),
+            )
         )
         result = await self.db.execute(stmt)
         await self.db.flush()
@@ -109,10 +120,15 @@ class UserRepository:
 
     async def deactivate(self, id: UUID) -> bool:
         """Soft-delete: set is_active=False and deleted_at=now. Idempotent."""
-        now = datetime.now(timezone.utc)
-        stmt = update(UserModel).where(
-            UserModel.id == id, UserModel.deleted_at.is_(None),
-        ).values(is_active=False, deleted_at=now, updated_at=now)
+        now = datetime.now(UTC)
+        stmt = (
+            update(UserModel)
+            .where(
+                UserModel.id == id,
+                UserModel.deleted_at.is_(None),
+            )
+            .values(is_active=False, deleted_at=now, updated_at=now)
+        )
         result = await self.db.execute(stmt)
         await self.db.flush()
         return (result.rowcount or 0) > 0

@@ -5,9 +5,8 @@ indices, commodities) and flags concentration risk whenever a single
 category exceeds 40% of total notional exposure. Emits a diversification
 score and concrete rebalance suggestions in the payload.
 """
-from __future__ import annotations
 
-from typing import Any
+from __future__ import annotations
 
 from platform.ai.orchestrator import AIContext, AIModule, AIPrediction
 
@@ -55,6 +54,7 @@ class PortfolioAI(AIModule):
     rebalance suggestion is emitted. Direction is always neutral; the
     confidence rises with concentration to flag the risk.
     """
+
     name = "portfolio"
     version = "1.0.0"
 
@@ -85,8 +85,11 @@ class PortfolioAI(AIModule):
         diversification = 1.0 - conc
         confidence = min(1.0, conc * 1.5) if over_concentrated else 0.3
         return AIPrediction(
-            module=self.name, symbol=ctx.symbol, direction="neutral",
-            confidence=confidence, horizon="medium",
+            module=self.name,
+            symbol=ctx.symbol,
+            direction="neutral",
+            confidence=confidence,
+            horizon="medium",
             payload={
                 "exposures": {k: round(v, 4) for k, v in exposures.items()},
                 "concentration": round(conc, 3),

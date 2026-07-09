@@ -29,12 +29,12 @@ min_strength : float
 confirmation_bars : int
     Number of consecutive closes beyond the channel required (default 2).
 """
+
 from __future__ import annotations
 
 from collections import deque
-from typing import Any
-
 from platform.strategies.sdk import Bar, Signal, Strategy, StrategyContext, strategy
+from typing import Any
 
 
 def donchian(highs: list[float], lows: list[float], period: int) -> tuple[float, float]:
@@ -54,7 +54,7 @@ def bollinger(prices: list[float], period: int, std: float) -> tuple[float, floa
     window = prices[-period:]
     mid = sum(window) / period
     var = sum((p - mid) ** 2 for p in window) / period
-    sd = var ** 0.5
+    sd = var**0.5
     return mid + std * sd, mid, mid - std * sd
 
 
@@ -132,7 +132,13 @@ class BreakoutStrategy(Strategy):
                     side="buy",
                     strength=strength,
                     suggested_stop_loss=lower,
-                    meta={"upper": upper, "lower": lower, "mid": mid, "mode": "bb" if self.use_bollinger else "donchian", "tf": bar.timeframe},
+                    meta={
+                        "upper": upper,
+                        "lower": lower,
+                        "mid": mid,
+                        "mode": "bb" if self.use_bollinger else "donchian",
+                        "tf": bar.timeframe,
+                    },
                 )
 
         if self._bear_confirm >= self.confirmation_bars:
@@ -145,6 +151,12 @@ class BreakoutStrategy(Strategy):
                     side="sell",
                     strength=strength,
                     suggested_stop_loss=upper,
-                    meta={"upper": upper, "lower": lower, "mid": mid, "mode": "bb" if self.use_bollinger else "donchian", "tf": bar.timeframe},
+                    meta={
+                        "upper": upper,
+                        "lower": lower,
+                        "mid": mid,
+                        "mode": "bb" if self.use_bollinger else "donchian",
+                        "tf": bar.timeframe,
+                    },
                 )
         return None

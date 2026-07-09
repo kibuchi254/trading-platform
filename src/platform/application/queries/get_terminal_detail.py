@@ -8,18 +8,18 @@ Vertical slice:
         → bridge registry: live status
         → return composite DTO
 """
+
 from __future__ import annotations
-
-from uuid import UUID
-
-from pydantic import BaseModel
-from sqlalchemy import func, select
 
 from platform.core.exceptions import NotFoundError
 from platform.core.logging import get_logger
 from platform.db.models import Account, Order, Position, Terminal
 from platform.db.session import db_context
 from platform.infrastructure.mt5_bridge.registry import get_registry
+from uuid import UUID
+
+from pydantic import BaseModel
+from sqlalchemy import func, select
 
 _log = get_logger(__name__)
 
@@ -114,7 +114,7 @@ async def handle_get_terminal_detail(query: GetTerminalDetailQuery) -> TerminalD
             live_status = "offline"  # DB lies; registry is truth
         else:
             live_status = terminal.status
-    except Exception:  # noqa: BLE001 — registry read is best-effort
+    except Exception:
         live_status = terminal.status
 
     return TerminalDetail(
@@ -124,9 +124,7 @@ async def handle_get_terminal_detail(query: GetTerminalDetailQuery) -> TerminalD
         adapter_kind=terminal.adapter_kind,
         version=terminal.version,
         status=live_status,
-        last_heartbeat_at=(
-            last_heartbeat.isoformat() if last_heartbeat is not None else None
-        ),
+        last_heartbeat_at=(last_heartbeat.isoformat() if last_heartbeat is not None else None),
         symbols=list(terminal.symbols or []),
         capabilities=dict(terminal.capabilities or {}),
         open_positions_count=int(open_positions_count or 0),

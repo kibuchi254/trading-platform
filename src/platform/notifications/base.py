@@ -16,21 +16,21 @@ sleeping the corresponding backoff before each retry.
 At-least-once delivery semantics apply — idempotency is the responsibility of
 downstream consumers (use ``NotificationMessage.meta["idempotency_key"]``).
 """
+
 from __future__ import annotations
 
 import abc
 import asyncio
-from datetime import datetime, timezone
-from typing import Any, Literal
-from uuid import UUID
-
-from pydantic import BaseModel, Field
-
+from datetime import UTC, datetime
 from platform.core.logging import get_logger
 from platform.db.models import Notification
 from platform.db.session import db_context
 from platform.events.bus import get_event_bus
 from platform.events.topics import Topic
+from typing import Any, Literal
+from uuid import UUID
+
+from pydantic import BaseModel, Field
 
 _log = get_logger(__name__)
 
@@ -167,7 +167,7 @@ class NotificationDispatcher:
                     message.subject or "",
                     message.body,
                 )
-            except Exception as exc:  # noqa: BLE001 — log & retry
+            except Exception as exc:
                 last_error = f"{type(exc).__name__}:{exc}"
                 _log.warning(
                     "dispatch_attempt_failed",
@@ -249,7 +249,7 @@ class NotificationDispatcher:
             )
             try:
                 results[name] = await self.dispatch(msg)
-            except Exception:  # noqa: BLE001 — one channel must not abort fan-out
+            except Exception:
                 _log.exception("dispatch_to_all_channel_error", channel=name)
                 results[name] = False
         return results
@@ -268,12 +268,12 @@ class NotificationDispatcher:
         async def _handler(payload: dict[str, Any]) -> None:
             try:
                 msg = NotificationMessage(**payload)
-            except Exception:  # noqa: BLE001
+            except Exception:
                 _log.exception("bus_payload_invalid", payload=payload)
                 return
             try:
                 await self.dispatch(msg)
-            except Exception:  # noqa: BLE001
+            except Exception:
                 _log.exception("bus_dispatch_error", channel=msg.channel)
 
         get_event_bus().subscribe(Topic.NOTIFICATIONS, _handler)
@@ -304,12 +304,12 @@ class NotificationDispatcher:
                     subject=message.subject,
                     body=message.body,
                     status="sent" if success else "failed",
-                    sent_at=datetime.now(timezone.utc) if success else None,
+                    sent_at=datetime.now(UTC) if success else None,
                     error=error,
                 )
                 session.add(row)
                 await session.commit()
-        except Exception:  # noqa: BLE001 — persistence is best-effort
+        except Exception:
             _log.exception(
                 "persist_failed",
                 channel=message.channel,
@@ -349,19 +349,19 @@ def get_dispatcher() -> NotificationDispatcher:
     if settings.smtp_host:
         try:
             channels["email"] = EmailChannel()
-        except Exception:  # noqa: BLE001
+        except Exception:
             _log.exception("email_channel_init_failed")
 
     if settings.telegram_bot_token:
         try:
             channels["telegram"] = TelegramChannel()
-        except Exception:  # noqa: BLE001
+        except Exception:
             _log.exception("telegram_channel_init_failed")
 
     if settings.discord_webhook_url:
         try:
             channels["discord"] = DiscordChannel()
-        except Exception:  # noqa: BLE001
+        except Exception:
             _log.exception("discord_channel_init_failed")
 
     _dispatcher = NotificationDispatcher(channels)

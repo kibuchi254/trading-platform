@@ -11,14 +11,10 @@ so the handler builds the raw ``MODIFY_POSITION`` command via the protocol
 helpers and enqueues it through the command queue — same pattern used by
 :class:`BridgeClientAdapter.modify_position`.
 """
+
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from uuid import UUID
-
-from pydantic import BaseModel
-from sqlalchemy import select
-
+from datetime import UTC, datetime
 from platform.core.exceptions import NotFoundError, ValidationError
 from platform.core.logging import get_logger
 from platform.db.models import Position, Terminal
@@ -28,6 +24,10 @@ from platform.events.topics import Topic
 from platform.infrastructure.mt5_bridge.command_queue import get_command_queue
 from platform.infrastructure.mt5_bridge.protocol import CommandType, command
 from platform.infrastructure.mt5_bridge.registry import get_registry
+from uuid import UUID
+
+from pydantic import BaseModel
+from sqlalchemy import select
 
 _log = get_logger(__name__)
 
@@ -91,7 +91,7 @@ async def handle_modify_position(cmd: ModifyPositionCommand) -> ModifyPositionRe
             pos.stop_loss = cmd.stop_loss
         if cmd.take_profit is not None:
             pos.take_profit = cmd.take_profit
-        pos.updated_at = datetime.now(timezone.utc)
+        pos.updated_at = datetime.now(UTC)
         await db.commit()
 
         result = ModifyPositionResult(

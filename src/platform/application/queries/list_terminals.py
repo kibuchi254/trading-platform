@@ -11,17 +11,17 @@ We do NOT mutate the DB rows here — the heartbeat watcher in
 For the read side we layer live registry status on top of the persisted row
 so the UI can show "last seen 5s ago" vs. "online".
 """
+
 from __future__ import annotations
-
-from uuid import UUID
-
-from pydantic import BaseModel
-from sqlalchemy import select
 
 from platform.core.logging import get_logger
 from platform.db.models import Terminal
 from platform.db.session import db_context
 from platform.infrastructure.mt5_bridge.registry import get_registry
+from uuid import UUID
+
+from pydantic import BaseModel
+from sqlalchemy import select
 
 _log = get_logger(__name__)
 

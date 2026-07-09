@@ -15,16 +15,16 @@ full-Kelly being pathologically sensitive to estimation error.
 If fewer than ``min_trades_for_stats`` trades exist for the strategy,
 we fall back to ``default_win_rate`` and ``default_payoff``.
 """
+
 from __future__ import annotations
-
-from uuid import UUID
-
-from sqlalchemy import desc, select
 
 from platform.core.logging import get_logger
 from platform.db.models import Trade
 from platform.db.session import db_context
 from platform.risk.engine import OrderContext, RiskRule
+from uuid import UUID
+
+from sqlalchemy import desc, select
 
 _log = get_logger(__name__)
 
@@ -117,8 +117,12 @@ class KellySizingRule(RiskRule):
             if n >= self.min_trades_for_stats and al > 0:
                 win_rate, avg_win, avg_loss = wr, aw, al
             elif n > 0:
-                _log.debug("kelly_insufficient_history", strategy_id=str(strategy_id),
-                           n_trades=n, required=self.min_trades_for_stats)
+                _log.debug(
+                    "kelly_insufficient_history",
+                    strategy_id=str(strategy_id),
+                    n_trades=n,
+                    required=self.min_trades_for_stats,
+                )
 
         f = kelly(win_rate, avg_win, avg_loss)
         f_capped = min(f, self.cap_fraction)
@@ -129,13 +133,21 @@ class KellySizingRule(RiskRule):
         if isinstance(meta, dict) and account_equity > 0 and meta.get("stop_distance"):
             try:
                 sd = float(meta["stop_distance"])
-                suggested_volume = (account_equity * f_capped) / sd if sd > 0 else ctx.volume * f_capped
+                suggested_volume = (
+                    (account_equity * f_capped) / sd if sd > 0 else ctx.volume * f_capped
+                )
             except (TypeError, ValueError):
                 suggested_volume = ctx.volume * f_capped
         else:
             suggested_volume = ctx.volume * f_capped
 
         self._suggestions[(ctx.terminal_id, ctx.symbol)] = suggested_volume
-        _log.debug("kelly_suggestion", terminal_id=ctx.terminal_id, symbol=ctx.symbol,
-                   win_rate=win_rate, kelly_f=f, capped_f=f_capped,
-                   suggested_volume=suggested_volume)
+        _log.debug(
+            "kelly_suggestion",
+            terminal_id=ctx.terminal_id,
+            symbol=ctx.symbol,
+            win_rate=win_rate,
+            kelly_f=f,
+            capped_f=f_capped,
+            suggested_volume=suggested_volume,
+        )

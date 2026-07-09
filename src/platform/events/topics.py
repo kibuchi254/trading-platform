@@ -1,4 +1,5 @@
 """Topic registry for the event bus. Centralizing here avoids typos."""
+
 from __future__ import annotations
 
 

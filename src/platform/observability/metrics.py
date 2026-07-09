@@ -20,13 +20,13 @@ appropriate counter. This keeps metrics concerns out of the bus itself.
 All metrics use the ``atlas_`` prefix to avoid collisions when scraped
 into a shared Prometheus instance.
 """
+
 from __future__ import annotations
 
+from platform.core.logging import get_logger
 from typing import TYPE_CHECKING, Any
 
 from prometheus_client import Counter, Gauge
-
-from platform.core.logging import get_logger
 
 if TYPE_CHECKING:
     from platform.events.bus import EventBus
@@ -160,14 +160,14 @@ def update_db_pool_in_use() -> None:
         # AsyncAdaptedQueuePool exposes the sync pool's `checkedout()`.
         checkedout = pool.checkedout() if hasattr(pool, "checkedout") else 0
         DB_POOL_IN_USE.set(int(checkedout))
-    except Exception:  # noqa: BLE001 — best-effort gauge update
+    except Exception:
         _log.debug("db_pool_gauge_update_failed")
 
 
 # ── EventBus instrumentation ──────────────────────────────────────────
 
 
-def instrument_event_bus(bus: "EventBus") -> None:
+def instrument_event_bus(bus: EventBus) -> None:
     """Wrap an :class:`EventBus` so every publish/handle emits metrics.
 
     Wraps both :meth:`EventBus.publish` (counts every published event by
@@ -202,5 +202,5 @@ def instrument_event_bus(bus: "EventBus") -> None:
 
     bus.publish = instrumented_publish  # type: ignore[method-assign]
     bus.subscribe = instrumented_subscribe  # type: ignore[method-assign]
-    setattr(bus, "_atlas_instrumented", True)
+    bus._atlas_instrumented = True
     _log.info("event_bus_instrumented")

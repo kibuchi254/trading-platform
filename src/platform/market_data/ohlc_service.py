@@ -8,18 +8,18 @@ fall through to the raw ``ticks`` table and synthesise the bars on the fly.
 This is the read-side counterpart to ``MarketDataEngine`` (which writes
 closed bars). All public methods are async and safe to call concurrently.
 """
+
 from __future__ import annotations
 
 from collections import OrderedDict
-from datetime import datetime, timezone
-from typing import Any
-
-from sqlalchemy import desc, select
-
+from datetime import UTC, datetime
 from platform.core.logging import get_logger
 from platform.db.models import Candle, Tick
 from platform.db.session import db_context
 from platform.market_data.engine import MarketDataEngine
+from typing import Any
+
+from sqlalchemy import desc, select
 
 _log = get_logger(__name__)
 
@@ -60,9 +60,9 @@ class _CandleLRU:
             self._data.clear()
             return
         keys = [
-            k for k in self._data
-            if (symbol is None or k[0] == symbol)
-            and (timeframe is None or k[1] == timeframe)
+            k
+            for k in self._data
+            if (symbol is None or k[0] == symbol) and (timeframe is None or k[1] == timeframe)
         ]
         for k in keys:
             self._data.pop(k, None)
@@ -158,9 +158,7 @@ class OHLCService:
         self._cache.put((symbol, timeframe, row.ts), row)
         return float(row.close)
 
-    async def get_history(
-        self, symbol: str, timeframe: str, count: int = 500
-    ) -> list[Candle]:
+    async def get_history(self, symbol: str, timeframe: str, count: int = 500) -> list[Candle]:
         """Convenience wrapper — the last ``count`` candles ending *now*.
 
         Ideal for charting endpoints that just want "the last N bars".
@@ -226,15 +224,19 @@ class OHLCService:
             ask_f = float(ask)
             last_f = float(last) if last is not None else (bid_f + ask_f) / 2
             vol_f = float(volume) if volume is not None else 0.0
-            ts_aware = ts if ts.tzinfo else ts.replace(tzinfo=timezone.utc)
+            ts_aware = ts if ts.tzinfo else ts.replace(tzinfo=UTC)
             bucket_ts = datetime.fromtimestamp(
-                (int(ts_aware.timestamp()) // seconds) * seconds, tz=timezone.utc
+                (int(ts_aware.timestamp()) // seconds) * seconds, tz=UTC
             )
             bar = bars.get(bucket_ts)
             if bar is None:
                 bars[bucket_ts] = {
-                    "open": last_f, "high": last_f, "low": last_f, "close": last_f,
-                    "volume": vol_f, "tick_count": 1,
+                    "open": last_f,
+                    "high": last_f,
+                    "low": last_f,
+                    "close": last_f,
+                    "volume": vol_f,
+                    "tick_count": 1,
                 }
             else:
                 bar["high"] = max(bar["high"], last_f)
@@ -251,7 +253,10 @@ class OHLCService:
                 symbol=symbol,
                 timeframe=timeframe,
                 ts=bucket_ts,
-                open=b["open"], high=b["high"], low=b["low"], close=b["close"],
+                open=b["open"],
+                high=b["high"],
+                low=b["low"],
+                close=b["close"],
                 volume=b["volume"],
                 is_closed=True,
             )
@@ -259,16 +264,16 @@ class OHLCService:
             self._cache.put((symbol, timeframe, bucket_ts), c)
         _log.info(
             "ohlc_aggregated_on_demand",
-            symbol=symbol, timeframe=timeframe,
-            ticks=len(stream), bars=len(out),
+            symbol=symbol,
+            timeframe=timeframe,
+            ticks=len(stream),
+            bars=len(out),
         )
         return out
 
     # ── Cache management ────────────────────────────────────────────────────
 
-    def invalidate_cache(
-        self, symbol: str | None = None, timeframe: str | None = None
-    ) -> None:
+    def invalidate_cache(self, symbol: str | None = None, timeframe: str | None = None) -> None:
         """Drop cached candles. Call after bulk imports / back-fills."""
         self._cache.invalidate(symbol=symbol, timeframe=timeframe)
 

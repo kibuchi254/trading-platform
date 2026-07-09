@@ -1,17 +1,17 @@
 """Terminals REST router — register / list / detail / heartbeat status."""
+
 from __future__ import annotations
 
+from platform.core.dependencies import CurrentUser, get_current_user
+from platform.db.models import Terminal
+from platform.db.session import get_db
+from platform.infrastructure.mt5_bridge.registry import get_registry
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from platform.core.dependencies import CurrentUser, get_current_user
-from platform.db.models import Terminal
-from platform.db.session import get_db
-from platform.infrastructure.mt5_bridge.registry import get_registry
 
 router = APIRouter(prefix="/terminals", tags=["terminals"])
 
@@ -48,10 +48,16 @@ async def list_terminals(
         live = await registry.get(r.terminal_id)
         out.append(
             TerminalOut(
-                id=r.id, terminal_id=r.terminal_id, broker=None, broker_account=r.broker_account,
-                adapter_kind=r.adapter_kind, version=r.version, status=r.status,
+                id=r.id,
+                terminal_id=r.terminal_id,
+                broker=None,
+                broker_account=r.broker_account,
+                adapter_kind=r.adapter_kind,
+                version=r.version,
+                status=r.status,
                 last_heartbeat_at=r.last_heartbeat_at.isoformat() if r.last_heartbeat_at else None,
-                symbols=r.symbols, capabilities=r.capabilities,
+                symbols=r.symbols,
+                capabilities=r.capabilities,
                 is_online=live is not None and live.status == "online",
             )
         )
@@ -70,14 +76,21 @@ async def get_terminal(
     r = (await db.execute(stmt)).scalar_one_or_none()
     if r is None:
         from platform.core.exceptions import NotFoundError
+
         raise NotFoundError(f"Terminal {terminal_id} not found")
     registry = get_registry()
     live = await registry.get(terminal_id)
     return TerminalOut(
-        id=r.id, terminal_id=r.terminal_id, broker=None, broker_account=r.broker_account,
-        adapter_kind=r.adapter_kind, version=r.version, status=r.status,
+        id=r.id,
+        terminal_id=r.terminal_id,
+        broker=None,
+        broker_account=r.broker_account,
+        adapter_kind=r.adapter_kind,
+        version=r.version,
+        status=r.status,
         last_heartbeat_at=r.last_heartbeat_at.isoformat() if r.last_heartbeat_at else None,
-        symbols=r.symbols, capabilities=r.capabilities,
+        symbols=r.symbols,
+        capabilities=r.capabilities,
         is_online=live is not None and live.status == "online",
     )
 
@@ -88,6 +101,7 @@ async def sync_positions(
     user: CurrentUser = Depends(get_current_user),
 ) -> dict[str, str]:
     from platform.infrastructure.mt5_bridge.client import get_bridge_client
+
     reply = await get_bridge_client().sync_positions(terminal_id=terminal_id)
     return {"status": "ok", "received": str(len(reply.payload.get("positions", [])))}
 
@@ -98,5 +112,6 @@ async def sync_account(
     user: CurrentUser = Depends(get_current_user),
 ) -> dict[str, object]:
     from platform.infrastructure.mt5_bridge.client import get_bridge_client
+
     reply = await get_bridge_client().sync_account(terminal_id=terminal_id)
     return {"status": "ok", "account": reply.payload}

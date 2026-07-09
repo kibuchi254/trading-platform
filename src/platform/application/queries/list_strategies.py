@@ -5,17 +5,16 @@ Vertical slice:
   API → query → DB: select Strategy rows by org_id (active_only filter)
         → return DTOs
 """
+
 from __future__ import annotations
 
 from datetime import datetime
+from platform.db.models import Strategy as StrategyModel
+from platform.db.session import db_context
 from uuid import UUID
 
 from pydantic import BaseModel
 from sqlalchemy import select
-
-from platform.db.models import Strategy as StrategyModel
-from platform.db.session import db_context
-
 
 # ── Query + DTO ────────────────────────────────────────────────────────────
 

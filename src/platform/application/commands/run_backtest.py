@@ -10,19 +10,19 @@ The actual simulation runs out-of-process on a Celery worker (see
 ``platform.infrastructure.celery_app.run_backtest``). The HTTP request never
 blocks on the simulation.
 """
+
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
-from uuid import UUID, uuid4
-
-from pydantic import BaseModel
-
 from platform.core.logging import get_logger
 from platform.db.models import Backtest
 from platform.db.session import db_context
 from platform.events.bus import get_event_bus
 from platform.events.topics import Topic
+from typing import Any
+from uuid import UUID, uuid4
+
+from pydantic import BaseModel
 
 _log = get_logger(__name__)
 
@@ -92,7 +92,7 @@ async def handle_run_backtest(cmd: RunBacktestCommand) -> RunBacktestResult:
             queue="backtest",
         )
         queued = True
-    except Exception:  # noqa: BLE001 — Celery may not be running in dev
+    except Exception:
         _log.warning(
             "backtest_enqueue_failed",
             backtest_id=str(backtest_id),

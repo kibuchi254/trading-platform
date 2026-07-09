@@ -1,9 +1,9 @@
 """Backtest report generator — produces markdown + JSON summaries."""
+
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
-
+from datetime import UTC, datetime
 from platform.backtest.engine import BacktestResult
 
 
@@ -13,7 +13,7 @@ def generate_markdown(result: BacktestResult) -> str:
         f"# Backtest Report — {result.backtest_id}",
         "",
         f"**Status:** {result.status}",
-        f"**Generated at:** {datetime.now(timezone.utc).isoformat()}",
+        f"**Generated at:** {datetime.now(UTC).isoformat()}",
         "",
         "## Summary Metrics",
         "",
@@ -51,9 +51,9 @@ def generate_markdown(result: BacktestResult) -> str:
         ]
         for i, t in enumerate(result.trades[:10], 1):
             lines.append(
-                f"| {i} | {t.get('symbol','')} | {t.get('side','')} | "
-                f"{t.get('volume',0)} | {t.get('entry_price',0):.5f} | "
-                f"{t.get('exit_price',0):.5f} | {float(t.get('pnl',0)):+.2f} |"
+                f"| {i} | {t.get('symbol', '')} | {t.get('side', '')} | "
+                f"{t.get('volume', 0)} | {t.get('entry_price', 0):.5f} | "
+                f"{t.get('exit_price', 0):.5f} | {float(t.get('pnl', 0)):+.2f} |"
             )
         lines.append("")
 
@@ -95,4 +95,4 @@ def _ascii_chart(equity_curve: list[dict], width: int = 60, height: int = 12) ->
     return "\n".join(rows)
 
 
-__all__ = ["generate_markdown", "generate_json"]
+__all__ = ["generate_json", "generate_markdown"]

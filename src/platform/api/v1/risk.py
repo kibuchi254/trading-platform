@@ -1,11 +1,12 @@
 """Risk REST router — view current limits, toggle kill switch."""
-from __future__ import annotations
 
-from fastapi import APIRouter, Depends
-from pydantic import BaseModel
+from __future__ import annotations
 
 from platform.core.dependencies import CurrentUser, get_current_user, require_role
 from platform.risk.engine import get_risk_engine
+
+from fastapi import APIRouter, Depends
+from pydantic import BaseModel
 
 router = APIRouter(prefix="/risk", tags=["risk"])
 

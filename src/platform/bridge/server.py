@@ -7,13 +7,12 @@ The bridge is *stateless* except for the in-memory terminal registry (which is
 rebuilt from REGISTER events on reconnect). For HA, run multiple bridge nodes
 behind a sticky-session load balancer — see `docs → Bridge sharding`.
 """
+
 from __future__ import annotations
 
 import argparse
 import asyncio
 import signal
-from typing import TYPE_CHECKING
-
 from platform.bridge.handlers import dispatch
 from platform.bridge.session import BridgeSession
 from platform.core.config import get_settings
@@ -21,6 +20,7 @@ from platform.core.logging import configure_logging, get_logger
 from platform.core.telemetry import start_metrics_server
 from platform.infrastructure.mt5_bridge.command_queue import get_command_queue
 from platform.infrastructure.mt5_bridge.registry import get_registry
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from websockets.asyncio.server import ServerConnection
@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 _log = get_logger(__name__)
 
 
-async def _on_connect(ws: "ServerConnection") -> None:
+async def _on_connect(ws: ServerConnection) -> None:
     """Per-connection handler. One BridgeSession per terminal."""
     session = BridgeSession(ws)
     _log.info("connection_opened", session_id=session.id, peer=ws.remote_address)
@@ -40,12 +40,13 @@ async def _on_connect(ws: "ServerConnection") -> None:
                 raw = raw.decode("utf-8")
             try:
                 from platform.infrastructure.mt5_bridge.protocol import BridgeMessage
+
                 msg = BridgeMessage.model_validate_json(raw)
-            except Exception:  # noqa: BLE001
+            except Exception:
                 _log.warning("invalid_message", session_id=session.id, raw=raw[:200])
                 continue
             await dispatch(msg, session)
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         _log.info("connection_closed", session_id=session.id, error=str(e))
     finally:
         if session.terminal_id:
@@ -69,7 +70,6 @@ async def main() -> None:
     await registry.start_watcher()
 
     # Import websockets lazily so the rest of the package imports cleanly
-    import websockets
     from websockets.asyncio.server import serve
 
     stop = asyncio.Future()
@@ -82,7 +82,9 @@ async def main() -> None:
     for sig in (signal.SIGINT, signal.SIGTERM):
         asyncio.get_running_loop().add_signal_handler(sig, _signal_handler)
 
-    async with serve(_on_connect, host, port, max_size=2**20, ping_interval=20, ping_timeout=10) as server:
+    async with serve(
+        _on_connect, host, port, max_size=2**20, ping_interval=20, ping_timeout=10
+    ) as server:
         _log.info("bridge_listening", host=host, port=port)
         await stop
         _log.info("bridge_stopping")

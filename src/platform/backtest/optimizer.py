@@ -1,21 +1,20 @@
 """Optimization engine — grid search, random search, walk-forward analysis."""
+
 from __future__ import annotations
 
 import asyncio
 import itertools
 import random
 import uuid
+from platform.backtest.engine import BacktestConfig, BacktestEngine, BacktestResult
+from platform.core.logging import get_logger
+from platform.db.models import Backtest, Strategy
+from platform.db.session import db_context
 from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, Field
 from sqlalchemy import select
-
-from platform.backtest.engine import BacktestConfig, BacktestEngine, BacktestResult
-from platform.backtest.metrics import compute_max_drawdown
-from platform.core.logging import get_logger
-from platform.db.models import Backtest, Strategy
-from platform.db.session import db_context
 
 _log = get_logger(__name__)
 
@@ -57,7 +56,9 @@ class OptimizationEngine:
         combinations = self._generate_combinations(param_grid, mode, n_samples)
         _log.info(
             "optimization_starting",
-            mode=mode, combinations=len(combinations), metric=metric,
+            mode=mode,
+            combinations=len(combinations),
+            metric=metric,
         )
 
         # Run all backtests concurrently (bounded)
@@ -71,19 +72,22 @@ class OptimizationEngine:
                 _log.warning("optimization_run_failed", params=params, error=str(res))
                 continue
             score = self._extract_metric(res, metric)
-            scored.append({
-                "params": params,
-                "score": score,
-                "total_trades": res.total_trades,
-                "total_return_pct": res.total_return_pct,
-                "max_drawdown_pct": res.max_drawdown_pct,
-                "win_rate": res.win_rate,
-                "profit_factor": res.profit_factor,
-            })
+            scored.append(
+                {
+                    "params": params,
+                    "score": score,
+                    "total_trades": res.total_trades,
+                    "total_return_pct": res.total_return_pct,
+                    "max_drawdown_pct": res.max_drawdown_pct,
+                    "win_rate": res.win_rate,
+                    "profit_factor": res.profit_factor,
+                }
+            )
 
         if not scored:
             return OptimizationResult(
-                backtest_id=uuid.uuid4(), metric=metric,
+                backtest_id=uuid.uuid4(),
+                metric=metric,
                 all_results_count=0,
             )
 
@@ -94,7 +98,8 @@ class OptimizationEngine:
         avg = sum(s["score"] for s in scored) / len(scored)
 
         return OptimizationResult(
-            backtest_id=uuid.uuid4(), metric=metric,
+            backtest_id=uuid.uuid4(),
+            metric=metric,
             top_results=scored[:top_n],
             all_results_count=len(scored),
             best_params=scored[0]["params"] if scored else {},
@@ -130,7 +135,11 @@ class OptimizationEngine:
             # Optimize on train
             train_config = base_config.model_copy(update={"start": train_start, "end": train_end})
             train_result = await self.optimize(
-                train_config, param_grid, metric=metric, mode="grid", top_n=1,
+                train_config,
+                param_grid,
+                metric=metric,
+                mode="grid",
+                top_n=1,
             )
 
             if not train_result.best_params:
@@ -139,7 +148,8 @@ class OptimizationEngine:
             # Test on out-of-sample
             test_config = base_config.model_copy(
                 update={
-                    "start": test_start, "end": test_end,
+                    "start": test_start,
+                    "end": test_end,
                     "strategy_config": {**base_config.strategy_config, **train_result.best_params},
                 }
             )
@@ -150,22 +160,27 @@ class OptimizationEngine:
                 test_score = self._extract_metric(test_res, metric)
 
             test_scores.append(test_score)
-            per_window.append({
-                "window": w + 1,
-                "train_start": train_start.isoformat(),
-                "train_end": train_end.isoformat(),
-                "test_start": test_start.isoformat(),
-                "test_end": test_end.isoformat(),
-                "best_params": train_result.best_params,
-                "train_score": train_result.best_params and train_result.top_results[0]["score"],
-                "test_score": test_score,
-            })
+            per_window.append(
+                {
+                    "window": w + 1,
+                    "train_start": train_start.isoformat(),
+                    "train_end": train_end.isoformat(),
+                    "test_start": test_start.isoformat(),
+                    "test_end": test_end.isoformat(),
+                    "best_params": train_result.best_params,
+                    "train_score": train_result.best_params
+                    and train_result.top_results[0]["score"],
+                    "test_score": test_score,
+                }
+            )
 
         avg_test = sum(test_scores) / len(test_scores) if test_scores else 0
         var = sum((s - avg_test) ** 2 for s in test_scores) / len(test_scores) if test_scores else 0
-        std_test = var ** 0.5
+        std_test = var**0.5
         # Robustness = avg / (std + epsilon) — higher is better
-        robustness = avg_test / (std_test + 1e-9) if std_test > 0 else float("inf") if avg_test > 0 else 0
+        robustness = (
+            avg_test / (std_test + 1e-9) if std_test > 0 else float("inf") if avg_test > 0 else 0
+        )
 
         return WalkForwardResult(
             windows=len(per_window),

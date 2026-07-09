@@ -22,18 +22,18 @@ Design notes
 * Failures inside a check are caught and converted to ``UNHEALTHY``
   rather than propagating — one bad check must never crash the probe.
 """
+
 from __future__ import annotations
 
 import abc
 import asyncio
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
+from platform.core.logging import get_logger
 from typing import Any
 
 from pydantic import BaseModel, Field
-
-from platform.core.logging import get_logger
 
 _log = get_logger(__name__)
 
@@ -70,7 +70,7 @@ class HealthStatus(BaseModel):
     latency_ms: float = 0.0
     message: str = ""
     details: dict[str, Any] = Field(default_factory=dict)
-    ts: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    ts: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class HealthCheck(abc.ABC):
@@ -176,7 +176,8 @@ class HealthChecker:
             )
 
         critical_unhealthy = [
-            n for n, s in all_status.items()
+            n
+            for n, s in all_status.items()
             if s.status == HealthState.UNHEALTHY and self._checks[n].critical
         ]
         any_degraded = any(s.status == HealthState.DEGRADED for s in all_status.values())
@@ -214,7 +215,7 @@ class HealthChecker:
         start = time.monotonic()
         try:
             status = await check.check()
-        except Exception as exc:  # noqa: BLE001 — must never propagate
+        except Exception as exc:
             elapsed = (time.monotonic() - start) * 1000.0
             _log.exception("health_check_failed", name=check.name)
             return HealthStatus(

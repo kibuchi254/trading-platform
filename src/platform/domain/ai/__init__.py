@@ -5,23 +5,23 @@ AI module, an `AIResult` aggregate that persists it and accepts feedback /
 ground-truth labels for calibration, and `CompositeSignal` which fuses the
 predictions of multiple modules into a single signed score.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 from enum import StrEnum
-from typing import Any
-from uuid import UUID
-
 from platform.core.exceptions import DomainError
 from platform.domain.shared import AggregateRoot, DomainEvent, ValueObject
-
+from typing import Any
+from uuid import UUID
 
 # ── Enums ───────────────────────────────────────────────────────────────────
 
 
 class AIDirection(StrEnum):
     """Predicted direction of future price movement."""
+
     BULLISH = "bullish"
     BEARISH = "bearish"
     NEUTRAL = "neutral"
@@ -29,13 +29,15 @@ class AIDirection(StrEnum):
 
 class AIHorizon(StrEnum):
     """Time horizon the prediction is meant to cover."""
-    SHORT = "short"    # minutes → hours
+
+    SHORT = "short"  # minutes → hours
     MEDIUM = "medium"  # hours → days
-    LONG = "long"      # days → weeks
+    LONG = "long"  # days → weeks
 
 
 class AIFeedback(StrEnum):
     """Operator feedback on a recorded prediction."""
+
     THUMBS_UP = "thumbs_up"
     THUMBS_DOWN = "thumbs_down"
     NONE = "none"
@@ -43,6 +45,7 @@ class AIFeedback(StrEnum):
 
 class AICalibration(StrEnum):
     """Bucketed confidence level — used for routing & display."""
+
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
@@ -54,6 +57,7 @@ class AICalibration(StrEnum):
 @dataclass(frozen=True)
 class AIConfidence(ValueObject):
     """Normalised confidence in [0.0, 1.0] with a derived calibration bucket."""
+
     value: float
 
     def __post_init__(self) -> None:
@@ -80,6 +84,7 @@ class AIPrediction(ValueObject):
     the same prediction. `is_actionable` is the gate the executor checks before
     turning a prediction into a Signal.
     """
+
     module: str
     symbol: str
     direction: AIDirection
@@ -88,7 +93,7 @@ class AIPrediction(ValueObject):
     payload: dict[str, Any] = field(default_factory=dict)
     model_version: str | None = None
     input_hash: str | None = None
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     @property
     def is_actionable(self) -> bool:
@@ -114,6 +119,7 @@ class CompositeSignal(ValueObject):
     [-1, +1]. `agreement_ratio` is the share of modules whose direction matches
     `dominant_direction` — a high ratio with a non-zero score is a consensus.
     """
+
     symbol: str
     score: float
     contributing_modules: dict[str, AIPrediction]
@@ -124,9 +130,7 @@ class CompositeSignal(ValueObject):
         if not -1.0 <= self.score <= 1.0:
             raise DomainError(f"CompositeSignal.score must be in [-1,1], got {self.score}")
         if not 0.0 <= self.agreement_ratio <= 1.0:
-            raise DomainError(
-                f"agreement_ratio must be in [0,1], got {self.agreement_ratio}"
-            )
+            raise DomainError(f"agreement_ratio must be in [0,1], got {self.agreement_ratio}")
 
     @property
     def is_consensus(self) -> bool:
@@ -173,6 +177,7 @@ class AIResult(AggregateRoot):
     ground_truth_recorded. All transitions are additive — once feedback is set
     it cannot be unset, only overridden by a new rating.
     """
+
     org_id: UUID
     module: str
     symbol: str
@@ -181,7 +186,7 @@ class AIResult(AggregateRoot):
     confidence: AIConfidence
     model_version: str | None = None
     input_hash: str | None = None
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     feedback: AIFeedback = AIFeedback.NONE
     feedback_notes: str | None = None
     ground_truth: AIDirection | None = None
@@ -190,8 +195,11 @@ class AIResult(AggregateRoot):
     def __post_init__(self) -> None:
         self.record_event(
             AIPredictionRecorded(
-                ai_result_id=self.id, org_id=self.org_id, module=self.module,
-                symbol=self.symbol, direction=self.prediction.direction.value,
+                ai_result_id=self.id,
+                org_id=self.org_id,
+                module=self.module,
+                symbol=self.symbol,
+                direction=self.prediction.direction.value,
                 confidence=self.confidence.value,
             )
         )
@@ -204,7 +212,9 @@ class AIResult(AggregateRoot):
         self.feedback_notes = notes
         self.record_event(
             AIFeedbackReceived(
-                ai_result_id=self.id, feedback=rating.value, notes=notes,
+                ai_result_id=self.id,
+                feedback=rating.value,
+                notes=notes,
             )
         )
 
@@ -217,11 +227,9 @@ class AIResult(AggregateRoot):
         if self.ground_truth is not None:
             if self.ground_truth == actual_direction:
                 return
-            raise DomainError(
-                f"Ground truth already set to {self.ground_truth.value}"
-            )
+            raise DomainError(f"Ground truth already set to {self.ground_truth.value}")
         self.ground_truth = actual_direction
-        self.ground_truth_recorded_at = datetime.now(timezone.utc)
+        self.ground_truth_recorded_at = datetime.now(UTC)
         correct = self.prediction.direction == actual_direction
         self.record_event(
             AIGroundTruthRecorded(
@@ -241,8 +249,15 @@ class AIResult(AggregateRoot):
 
 
 __all__ = [
-    "AIDirection", "AIHorizon", "AIFeedback", "AICalibration",
-    "AIConfidence", "AIPrediction", "CompositeSignal",
-    "AIPredictionRecorded", "AIFeedbackReceived", "AIGroundTruthRecorded",
+    "AICalibration",
+    "AIConfidence",
+    "AIDirection",
+    "AIFeedback",
+    "AIFeedbackReceived",
+    "AIGroundTruthRecorded",
+    "AIHorizon",
+    "AIPrediction",
+    "AIPredictionRecorded",
     "AIResult",
+    "CompositeSignal",
 ]

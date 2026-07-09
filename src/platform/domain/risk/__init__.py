@@ -4,23 +4,23 @@ Models per-org runtime risk state and the audit trail of breaches. Pure Python
 domain layer; the evaluation engine that produces RiskEvents lives in
 `platform/services/risk_engine/`.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 from enum import StrEnum
-from typing import Any
-from uuid import UUID
-
 from platform.core.exceptions import DomainError
 from platform.domain.shared import AggregateRoot, DomainEvent, ValueObject
-
+from typing import Any
+from uuid import UUID
 
 # ── Enums ───────────────────────────────────────────────────────────────────
 
 
 class RiskSeverity(StrEnum):
     """How serious a breach is — drives notification routing & response."""
+
     INFO = "info"
     WARNING = "warning"
     CRITICAL = "critical"
@@ -29,6 +29,7 @@ class RiskSeverity(StrEnum):
 
 class RiskAction(StrEnum):
     """What the risk engine did in response to a breach."""
+
     LOG = "log"
     BLOCK = "block"
     CLOSE_ALL = "close_all"
@@ -38,6 +39,7 @@ class RiskAction(StrEnum):
 
 class RiskRuleName(StrEnum):
     """Canonical names for the 12 risk rules in the platform."""
+
     KILL_SWITCH = "kill_switch"
     MAX_DAILY_LOSS = "max_daily_loss"
     MAX_WEEKLY_LOSS = "max_weekly_loss"
@@ -63,6 +65,7 @@ class RiskThreshold(ValueObject):
     loss limits (current < 0, limit < 0), exposure limits (both positive), and
     count limits (both positive integers). `is_breached` is True at ratio ≥ 1.
     """
+
     rule_name: RiskRuleName
     limit_value: float
     current_value: float
@@ -93,6 +96,7 @@ class RiskState(ValueObject):
     engine holds the current instance and folds each market update through
     `with_daily_pnl` / `with_new_position` to produce the next state.
     """
+
     org_id: UUID
     daily_pnl: float = 0.0
     weekly_pnl: float = 0.0
@@ -101,7 +105,7 @@ class RiskState(ValueObject):
     kill_switch_engaged: bool = False
     positions_count: int = 0
 
-    def with_daily_pnl(self, delta: float) -> "RiskState":
+    def with_daily_pnl(self, delta: float) -> RiskState:
         """Apply a realised-PnL delta (positive for profit, negative for loss)."""
         return replace(
             self,
@@ -110,7 +114,7 @@ class RiskState(ValueObject):
             current_drawdown=min(self.current_drawdown, self.daily_pnl + delta),
         )
 
-    def with_new_position(self, exposure_value: float) -> "RiskState":
+    def with_new_position(self, exposure_value: float) -> RiskState:
         """Record a new position opened with the given notional exposure."""
         if exposure_value < 0:
             raise DomainError("exposure_value must be non-negative")
@@ -120,7 +124,7 @@ class RiskState(ValueObject):
             positions_count=self.positions_count + 1,
         )
 
-    def with_closed_position(self, exposure_value: float) -> "RiskState":
+    def with_closed_position(self, exposure_value: float) -> RiskState:
         """Mirror of `with_new_position` for position close."""
         return replace(
             self,
@@ -128,10 +132,10 @@ class RiskState(ValueObject):
             positions_count=max(0, self.positions_count - 1),
         )
 
-    def engage_kill_switch(self) -> "RiskState":
+    def engage_kill_switch(self) -> RiskState:
         return replace(self, kill_switch_engaged=True)
 
-    def release_kill_switch(self) -> "RiskState":
+    def release_kill_switch(self) -> RiskState:
         return replace(self, kill_switch_engaged=False)
 
     def check_breach(self, threshold: RiskThreshold) -> bool:
@@ -188,6 +192,7 @@ class RiskEvent(AggregateRoot):
     Severity can only escalate, never de-escalate — prevents hiding a critical
     event by re-tagging it as a warning.
     """
+
     org_id: UUID
     terminal_id: UUID | None
     rule: RiskRuleName
@@ -195,21 +200,25 @@ class RiskEvent(AggregateRoot):
     action: RiskAction = RiskAction.LOG
     details: dict[str, Any] = field(default_factory=dict)
     order_id: UUID | None = None
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     resolved_at: datetime | None = None
     resolution: str | None = None
 
     _severity_rank: dict[str, int] = field(
         default_factory=lambda: {s.value: i for i, s in enumerate(RiskSeverity)},
-        repr=False, compare=False,
+        repr=False,
+        compare=False,
     )
 
     def __post_init__(self) -> None:
         self.record_event(
             RiskLimitBreached(
-                risk_event_id=self.id, org_id=self.org_id,
-                rule=self.rule.value, severity=self.severity.value,
-                action=self.action.value, details=self.details,
+                risk_event_id=self.id,
+                org_id=self.org_id,
+                rule=self.rule.value,
+                severity=self.severity.value,
+                action=self.action.value,
+                details=self.details,
             )
         )
 
@@ -220,20 +229,16 @@ class RiskEvent(AggregateRoot):
             raise DomainError("RiskEvent already resolved")
         if not notes.strip():
             raise DomainError("resolution notes required")
-        self.resolved_at = datetime.now(timezone.utc)
+        self.resolved_at = datetime.now(UTC)
         self.resolution = notes.strip()
-        self.record_event(
-            RiskResolved(risk_event_id=self.id, resolution=notes.strip())
-        )
+        self.record_event(RiskResolved(risk_event_id=self.id, resolution=notes.strip()))
 
     def escalate(self, to: RiskSeverity) -> None:
         """Raise severity — only upward in the INFO→WARNING→CRITICAL→KILL order."""
         if self.resolved_at is not None:
             raise DomainError("Cannot escalate resolved RiskEvent")
         if self._severity_rank[to.value] <= self._severity_rank[self.severity.value]:
-            raise DomainError(
-                f"Cannot escalate {self.severity.value} → {to.value} (not upward)"
-            )
+            raise DomainError(f"Cannot escalate {self.severity.value} → {to.value} (not upward)")
         from_severity = self.severity
         self.severity = to
         # Side-effect: CLOSE_ALL kicks in once we reach CRITICAL or KILL.
@@ -242,14 +247,20 @@ class RiskEvent(AggregateRoot):
         self.record_event(
             RiskEscalated(
                 risk_event_id=self.id,
-                from_severity=from_severity.value, to_severity=to.value,
+                from_severity=from_severity.value,
+                to_severity=to.value,
             )
         )
 
 
 __all__ = [
-    "RiskSeverity", "RiskAction", "RiskRuleName",
-    "RiskThreshold", "RiskState",
-    "RiskLimitBreached", "RiskResolved", "RiskEscalated",
+    "RiskAction",
+    "RiskEscalated",
     "RiskEvent",
+    "RiskLimitBreached",
+    "RiskResolved",
+    "RiskRuleName",
+    "RiskSeverity",
+    "RiskState",
+    "RiskThreshold",
 ]

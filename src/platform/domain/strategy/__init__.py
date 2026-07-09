@@ -4,31 +4,37 @@ Pure business logic: no SQLAlchemy, no HTTP, no I/O. Persistence is handled by
 repositories in `infrastructure/`. All state transitions are guarded by
 `DomainError` and emit `DomainEvent`s for the event bus to drain.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 from enum import StrEnum
-from typing import Any
-from uuid import UUID
-
 from platform.core.exceptions import DomainError
 from platform.domain.shared import (
-    AggregateRoot, DomainEvent, Price, Symbol, Timeframe, ValueObject,
+    AggregateRoot,
+    DomainEvent,
+    Price,
+    Symbol,
+    Timeframe,
+    ValueObject,
 )
-
+from typing import Any
+from uuid import UUID
 
 # ── Enums ───────────────────────────────────────────────────────────────────
 
 
 class SignalSide(StrEnum):
     """Direction a signal advocates trading in."""
+
     BUY = "buy"
     SELL = "sell"
 
 
 class SignalStatus(StrEnum):
     """Lifecycle state of a Signal aggregate."""
+
     PENDING = "pending"
     EVALUATED = "evaluated"
     EXECUTED = "executed"
@@ -38,6 +44,7 @@ class SignalStatus(StrEnum):
 
 class SignalSource(StrEnum):
     """Where the signal originated."""
+
     STRATEGY = "strategy"
     AI = "ai"
     MANUAL = "manual"
@@ -49,6 +56,7 @@ class SignalSource(StrEnum):
 @dataclass(frozen=True)
 class SignalStrength(ValueObject):
     """Normalised conviction in [0.0, 1.0] — drives position sizing & filtering."""
+
     value: float
 
     def __post_init__(self) -> None:
@@ -73,6 +81,7 @@ class StrategyConfig(ValueObject):
     Behaves like a dict via `params` while keeping `version` and `risk_overrides`
     as first-class fields so they cannot be silently merged into params.
     """
+
     version: str
     params: dict[str, Any] = field(default_factory=dict)
     risk_overrides: dict[str, Any] = field(default_factory=dict)
@@ -84,7 +93,7 @@ class StrategyConfig(ValueObject):
     def get(self, key: str, default: Any = None) -> Any:
         return self.params.get(key, default)
 
-    def with_params(self, **overrides: Any) -> "StrategyConfig":
+    def with_params(self, **overrides: Any) -> StrategyConfig:
         return StrategyConfig(
             version=self.version,
             params={**self.params, **overrides},
@@ -157,6 +166,7 @@ class Signal(AggregateRoot):
     State transitions are one-way terminal: once EXECUTED/EXPIRED/REJECTED the
     signal cannot be moved.
     """
+
     org_id: UUID
     strategy_id: UUID
     terminal_id: UUID
@@ -167,7 +177,7 @@ class Signal(AggregateRoot):
     price: Price
     meta: dict[str, Any] = field(default_factory=dict)
     source: SignalSource = SignalSource.STRATEGY
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     status: SignalStatus = SignalStatus.PENDING
     rejection_reason: str | None = None
     executed_order_id: UUID | None = None
@@ -175,8 +185,10 @@ class Signal(AggregateRoot):
     def __post_init__(self) -> None:
         self.record_event(
             SignalEmitted(
-                signal_id=self.id, strategy_id=self.strategy_id,
-                symbol=self.symbol.name, side=self.side.value,
+                signal_id=self.id,
+                strategy_id=self.strategy_id,
+                symbol=self.symbol.name,
+                side=self.side.value,
                 strength=self.strength.value,
             )
         )
@@ -228,17 +240,16 @@ class Strategy(AggregateRoot):
     Mutating config does NOT bump the version — `bump_version` is an explicit
     business decision, typically after a backtest validates new behaviour.
     """
+
     org_id: UUID
     name: str
     slug: str
     kind: str  # ema_cross | rsi_reversion | smc_ob | custom | ...
     version: str = "1.0.0"
-    config: StrategyConfig = field(
-        default_factory=lambda: StrategyConfig(version="1.0.0")
-    )
+    config: StrategyConfig = field(default_factory=lambda: StrategyConfig(version="1.0.0"))
     is_active: bool = False
     description: str = ""
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     activated_at: datetime | None = None
     deactivated_at: datetime | None = None
 
@@ -247,18 +258,16 @@ class Strategy(AggregateRoot):
         if self.is_active:
             return
         self.is_active = True
-        self.activated_at = datetime.now(timezone.utc)
+        self.activated_at = datetime.now(UTC)
         self.deactivated_at = None
-        self.record_event(
-            StrategyActivated(strategy_id=self.id, org_id=self.org_id)
-        )
+        self.record_event(StrategyActivated(strategy_id=self.id, org_id=self.org_id))
 
     def deactivate(self) -> None:
         """Move from active → inactive. Idempotent if already inactive."""
         if not self.is_active:
             return
         self.is_active = False
-        self.deactivated_at = datetime.now(timezone.utc)
+        self.deactivated_at = datetime.now(UTC)
         self.record_event(StrategyDeactivated(strategy_id=self.id))
 
     def update_config(self, new_config: StrategyConfig) -> None:
@@ -282,16 +291,27 @@ class Strategy(AggregateRoot):
         )
         self.record_event(
             StrategyVersionBumped(
-                strategy_id=self.id, old_version=old, new_version=new_version,
+                strategy_id=self.id,
+                old_version=old,
+                new_version=new_version,
             )
         )
 
 
 __all__ = [
-    "SignalSide", "SignalStatus", "SignalSource",
-    "SignalStrength", "StrategyConfig",
-    "SignalEmitted", "SignalEvaluated", "SignalExecuted",
-    "SignalExpired", "SignalRejected",
-    "StrategyActivated", "StrategyDeactivated", "StrategyVersionBumped",
-    "Signal", "Strategy",
+    "Signal",
+    "SignalEmitted",
+    "SignalEvaluated",
+    "SignalExecuted",
+    "SignalExpired",
+    "SignalRejected",
+    "SignalSide",
+    "SignalSource",
+    "SignalStatus",
+    "SignalStrength",
+    "Strategy",
+    "StrategyActivated",
+    "StrategyConfig",
+    "StrategyDeactivated",
+    "StrategyVersionBumped",
 ]

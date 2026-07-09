@@ -1,15 +1,13 @@
 """Market Data engine — tick ingestion, OHLC aggregation, replay, multi-TF cache."""
+
 from __future__ import annotations
 
-import asyncio
-from collections import defaultdict
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Any
-
+from dataclasses import dataclass
+from datetime import UTC, datetime
 from platform.core.logging import get_logger
 from platform.events.bus import get_event_bus
 from platform.events.topics import Topic
+from typing import Any
 
 _log = get_logger(__name__)
 
@@ -47,7 +45,7 @@ class TimeframeBucket:
     def ingest(self, price: float, volume: float, ts: datetime) -> tuple[OHLCBar, OHLCBar | None]:
         """Returns (current_bar, just_closed_bar_or_None)."""
         bucket_ts = datetime.fromtimestamp(
-            (int(ts.timestamp()) // self.seconds) * self.seconds, tz=timezone.utc
+            (int(ts.timestamp()) // self.seconds) * self.seconds, tz=UTC
         )
         closed: OHLCBar | None = None
         if self.current_bar is None or self.current_bar.ts != bucket_ts:
@@ -55,9 +53,15 @@ class TimeframeBucket:
                 self.current_bar.is_closed = True
                 closed = self.current_bar
             self.current_bar = OHLCBar(
-                symbol=self.symbol, timeframe=self.timeframe, ts=bucket_ts,
-                open=price, high=price, low=price, close=price,
-                volume=volume, tick_count=1,
+                symbol=self.symbol,
+                timeframe=self.timeframe,
+                ts=bucket_ts,
+                open=price,
+                high=price,
+                low=price,
+                close=price,
+                volume=volume,
+                tick_count=1,
             )
         else:
             self.current_bar.update(price, volume)
@@ -68,8 +72,15 @@ class MarketDataEngine:
     """Subscribes to TICKS, aggregates OHLC for all configured timeframes,
     publishes closed bars back to the bus for strategies + AI to consume."""
 
-    TIMEFRAMES = {"M1": 60, "M5": 300, "M15": 900, "M30": 1800,
-                  "H1": 3600, "H4": 14400, "D1": 86400}
+    TIMEFRAMES = {
+        "M1": 60,
+        "M5": 300,
+        "M15": 900,
+        "M30": 1800,
+        "H1": 3600,
+        "H4": 14400,
+        "D1": 86400,
+    }
 
     def __init__(self) -> None:
         self._buckets: dict[tuple[str, str], TimeframeBucket] = {}
@@ -103,10 +114,16 @@ class MarketDataEngine:
                 await bus.publish(
                     Topic.TICKS,  # reuse — subscribers filter by `bar` key
                     {
-                        "type": "bar_closed", "symbol": symbol, "timeframe": tf,
-                        "ts": closed.ts.isoformat(), "open": closed.open,
-                        "high": closed.high, "low": closed.low, "close": closed.close,
-                        "volume": closed.volume, "is_closed": True,
+                        "type": "bar_closed",
+                        "symbol": symbol,
+                        "timeframe": tf,
+                        "ts": closed.ts.isoformat(),
+                        "open": closed.open,
+                        "high": closed.high,
+                        "low": closed.low,
+                        "close": closed.close,
+                        "volume": closed.volume,
+                        "is_closed": True,
                     },
                 )
 

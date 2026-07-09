@@ -1,9 +1,6 @@
 """Test AnomalyDetectionAI — spread/volume outlier detection."""
+
 from __future__ import annotations
-
-from uuid import uuid4
-
-import pytest
 
 from platform.ai.modules.anomaly_detection import (
     AnomalyDetectionAI,
@@ -11,25 +8,35 @@ from platform.ai.modules.anomaly_detection import (
     zscore,
 )
 from platform.ai.orchestrator import AIContext
+from uuid import uuid4
+
+import pytest
 
 
 def _ctx(features: dict | None = None) -> AIContext:
     return AIContext(
-        org_id=uuid4(), symbol="XAUUSD", timeframe="M15",
+        org_id=uuid4(),
+        symbol="XAUUSD",
+        timeframe="M15",
         features=features or {},
     )
 
 
-def _ticks(spreads: list[float], volumes: list[float] | None = None,
-           ts_start: float = 0.0) -> list[dict]:
+def _ticks(
+    spreads: list[float], volumes: list[float] | None = None, ts_start: float = 0.0
+) -> list[dict]:
     """Build tick_samples in the shape AnomalyDetectionAI expects."""
     out = []
     vols = volumes if volumes is not None else [1.0] * len(spreads)
     for i, s in enumerate(spreads):
-        out.append({
-            "bid": 100.0, "ask": 100.0 + s, "volume": vols[i],
-            "ts": ts_start + i,
-        })
+        out.append(
+            {
+                "bid": 100.0,
+                "ask": 100.0 + s,
+                "volume": vols[i],
+                "ts": ts_start + i,
+            }
+        )
     return out
 
 
@@ -149,8 +156,7 @@ async def test_anomaly_ai_severity_escalates_with_anomaly_count() -> None:
     for i in range(10):
         ticks.append({"bid": 100.0, "ask": 100.1, "volume": 1.0, "ts": float(i) * 10.0})
     for i in range(10):
-        ticks.append({"bid": 100.0, "ask": 100.1, "volume": 1.0,
-                      "ts": 100.0 + float(i) * 0.1})
+        ticks.append({"bid": 100.0, "ask": 100.1, "volume": 1.0, "ts": 100.0 + float(i) * 0.1})
     ctx = _ctx({"tick_samples": ticks})
     pred = await ai.analyze(ctx)
     # tick_rate_spike is one of the anomaly types.

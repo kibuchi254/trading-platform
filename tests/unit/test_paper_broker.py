@@ -1,10 +1,11 @@
 """Test the paper broker adapter — simulated execution for backtests."""
-from __future__ import annotations
 
-import pytest
+from __future__ import annotations
 
 from platform.infrastructure.execution.adapter_base import OrderRequest
 from platform.infrastructure.execution.paper_broker import PaperBrokerAdapter
+
+import pytest
 
 
 @pytest.fixture
@@ -18,8 +19,11 @@ async def broker():
 async def test_market_buy_fills_at_ask(broker) -> None:
     await broker.update_ticks("XAUUSD", 2000.0, 2000.5)
     req = OrderRequest(
-        client_order_id="test-1", symbol="XAUUSD", side="buy",
-        order_type="market", volume=0.10,
+        client_order_id="test-1",
+        symbol="XAUUSD",
+        side="buy",
+        order_type="market",
+        volume=0.10,
     )
     report = await broker.place_order(req)
     assert report.status == "filled"
@@ -30,8 +34,11 @@ async def test_market_buy_fills_at_ask(broker) -> None:
 async def test_market_sell_fills_at_bid(broker) -> None:
     await broker.update_ticks("XAUUSD", 2000.0, 2000.5)
     req = OrderRequest(
-        client_order_id="test-2", symbol="XAUUSD", side="sell",
-        order_type="market", volume=0.05,
+        client_order_id="test-2",
+        symbol="XAUUSD",
+        side="sell",
+        order_type="market",
+        volume=0.05,
     )
     report = await broker.place_order(req)
     assert report.status == "filled"
@@ -41,8 +48,12 @@ async def test_market_sell_fills_at_bid(broker) -> None:
 async def test_limit_order_pending_until_crossed(broker) -> None:
     await broker.update_ticks("XAUUSD", 2000.0, 2000.5)
     req = OrderRequest(
-        client_order_id="test-3", symbol="XAUUSD", side="buy",
-        order_type="limit", volume=0.10, price=1995.0,
+        client_order_id="test-3",
+        symbol="XAUUSD",
+        side="buy",
+        order_type="limit",
+        volume=0.10,
+        price=1995.0,
     )
     report = await broker.place_order(req)
     assert report.status == "accepted"
@@ -56,8 +67,11 @@ async def test_limit_order_pending_until_crossed(broker) -> None:
 async def test_close_position_realizes_pnl(broker) -> None:
     await broker.update_ticks("XAUUSD", 2000.0, 2000.5)
     req = OrderRequest(
-        client_order_id="test-4", symbol="XAUUSD", side="buy",
-        order_type="market", volume=0.10,
+        client_order_id="test-4",
+        symbol="XAUUSD",
+        side="buy",
+        order_type="market",
+        volume=0.10,
     )
     await broker.place_order(req)
 
@@ -89,8 +103,11 @@ async def test_account_snapshot(broker) -> None:
 async def test_disconnect_clears_state(broker) -> None:
     await broker.update_ticks("XAUUSD", 2000.0, 2000.5)
     req = OrderRequest(
-        client_order_id="test-5", symbol="XAUUSD", side="buy",
-        order_type="market", volume=0.10,
+        client_order_id="test-5",
+        symbol="XAUUSD",
+        side="buy",
+        order_type="market",
+        volume=0.10,
     )
     await broker.place_order(req)
     await broker.disconnect()

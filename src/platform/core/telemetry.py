@@ -1,12 +1,12 @@
 """OpenTelemetry + Prometheus wiring. Lightweight — meant to be extended per service."""
+
 from __future__ import annotations
-
-from typing import Any
-
-from prometheus_client import Counter, Gauge, Histogram, start_http_server
 
 from platform.core.config import get_settings
 from platform.core.logging import get_logger
+from typing import Any
+
+from prometheus_client import Counter, Gauge, Histogram, start_http_server
 
 _log = get_logger(__name__)
 
@@ -39,7 +39,9 @@ RISK_DECISIONS = Counter(
     "Risk engine decisions",
     ["decision"],  # approved | rejected | throttled
 )
-ORDERS_PLACED = Counter("atlas_orders_placed_total", "Orders placed", ["terminal_id", "symbol", "side"])
+ORDERS_PLACED = Counter(
+    "atlas_orders_placed_total", "Orders placed", ["terminal_id", "symbol", "side"]
+)
 
 # Worker / background-task metrics
 TICKS_PERSISTED = Counter(
@@ -86,7 +88,9 @@ def setup_tracing(app_name: str) -> Any:
 
     resource = Resource.create({"service.name": app_name, "deployment.environment": settings.env})
     provider = TracerProvider(resource=resource)
-    provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter(endpoint=settings.otel_exporter_otlp_endpoint)))
+    provider.add_span_processor(
+        BatchSpanProcessor(OTLPSpanExporter(endpoint=settings.otel_exporter_otlp_endpoint))
+    )
     trace.set_tracer_provider(provider)
 
     # NOTE: call FastAPIInstrumentor.instrument_app(app) from main.py after app creation

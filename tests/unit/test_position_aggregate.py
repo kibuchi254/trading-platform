@@ -1,21 +1,25 @@
 """Test Position aggregate — pure domain logic."""
+
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from platform.core.exceptions import DomainError
+from platform.domain.shared import Price, Quantity
+from platform.domain.trading import OrderSide, Position, PositionStatus
 from uuid import uuid4
 
 import pytest
 
-from platform.core.exceptions import DomainError
-from platform.domain.shared import Price, Quantity
-from platform.domain.trading import OrderSide, Position, PositionStatus
-
 
 def _make_position(side: OrderSide = OrderSide.BUY) -> Position:
     return Position(
-        org_id=uuid4(), terminal_id=uuid4(), symbol="XAUUSD",
-        side=side, volume=Quantity(volume=0.10),
-        open_price=Price(value=2000.0), opened_at=datetime.now(timezone.utc),
+        org_id=uuid4(),
+        terminal_id=uuid4(),
+        symbol="XAUUSD",
+        side=side,
+        volume=Quantity(volume=0.10),
+        open_price=Price(value=2000.0),
+        opened_at=datetime.now(UTC),
     )
 
 

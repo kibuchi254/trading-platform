@@ -1,9 +1,6 @@
 """Test the risk domain — RiskEvent, RiskThreshold, RiskState value objects."""
+
 from __future__ import annotations
-
-from uuid import uuid4
-
-import pytest
 
 from platform.core.exceptions import DomainError
 from platform.domain.risk import (
@@ -14,7 +11,9 @@ from platform.domain.risk import (
     RiskState,
     RiskThreshold,
 )
+from uuid import uuid4
 
+import pytest
 
 # ── RiskThreshold value object ───────────────────────────────────────────────
 
@@ -23,7 +22,8 @@ def test_threshold_breach_ratio_uses_absolute_values() -> None:
     """breach_ratio is direction-agnostic (|current|/|limit|)."""
     t = RiskThreshold(
         rule_name=RiskRuleName.MAX_DAILY_LOSS,
-        limit_value=-1000.0, current_value=-800.0,
+        limit_value=-1000.0,
+        current_value=-800.0,
     )
     assert t.breach_ratio == pytest.approx(0.8)
 
@@ -32,12 +32,14 @@ def test_threshold_is_breached_at_ratio_one_or_more() -> None:
     """is_breached fires at exactly 100% of limit."""
     breached = RiskThreshold(
         rule_name=RiskRuleName.MAX_DAILY_LOSS,
-        limit_value=-1000.0, current_value=-1000.0,
+        limit_value=-1000.0,
+        current_value=-1000.0,
     )
     assert breached.is_breached
     over = RiskThreshold(
         rule_name=RiskRuleName.MAX_DAILY_LOSS,
-        limit_value=-1000.0, current_value=-1200.0,
+        limit_value=-1000.0,
+        current_value=-1200.0,
     )
     assert over.is_breached
 
@@ -46,7 +48,8 @@ def test_threshold_is_warning_in_80_to_100_pct_band() -> None:
     """The 80–100% band is the pre-breach early-warning zone."""
     warn = RiskThreshold(
         rule_name=RiskRuleName.MAX_DAILY_LOSS,
-        limit_value=-1000.0, current_value=-850.0,
+        limit_value=-1000.0,
+        current_value=-850.0,
     )
     assert warn.is_warning
     assert not warn.is_breached
@@ -57,7 +60,8 @@ def test_threshold_rejects_zero_limit() -> None:
     with pytest.raises(DomainError):
         RiskThreshold(
             rule_name=RiskRuleName.MAX_DAILY_LOSS,
-            limit_value=0.0, current_value=0.0,
+            limit_value=0.0,
+            current_value=0.0,
         )
 
 
@@ -112,7 +116,8 @@ def test_risk_state_check_breach_max_daily_loss() -> None:
     s = RiskState(org_id=org, daily_pnl=-1500.0)
     threshold = RiskThreshold(
         rule_name=RiskRuleName.MAX_DAILY_LOSS,
-        limit_value=-1000.0, current_value=-1500.0,
+        limit_value=-1000.0,
+        current_value=-1500.0,
     )
     assert s.check_breach(threshold) is True
 
@@ -122,7 +127,8 @@ def test_risk_state_check_breach_position_limit() -> None:
     s = RiskState(org_id=uuid4(), positions_count=10)
     threshold = RiskThreshold(
         rule_name=RiskRuleName.POSITION_LIMIT,
-        limit_value=10, current_value=10,
+        limit_value=10,
+        current_value=10,
     )
     assert s.check_breach(threshold) is True
 
@@ -132,7 +138,8 @@ def test_risk_state_check_breach_kill_switch() -> None:
     s = RiskState(org_id=uuid4()).engage_kill_switch()
     threshold = RiskThreshold(
         rule_name=RiskRuleName.KILL_SWITCH,
-        limit_value=1, current_value=1,
+        limit_value=1,
+        current_value=1,
     )
     assert s.check_breach(threshold) is True
 
@@ -142,9 +149,12 @@ def test_risk_state_check_breach_kill_switch() -> None:
 
 def _make_event(severity: RiskSeverity = RiskSeverity.WARNING) -> RiskEvent:
     return RiskEvent(
-        org_id=uuid4(), terminal_id="t1",
-        rule=RiskRuleName.MAX_DAILY_LOSS, severity=severity,
-        action=RiskAction.LOG, details={"loss": -1500.0},
+        org_id=uuid4(),
+        terminal_id="t1",
+        rule=RiskRuleName.MAX_DAILY_LOSS,
+        severity=severity,
+        action=RiskAction.LOG,
+        details={"loss": -1500.0},
     )
 
 

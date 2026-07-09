@@ -1,15 +1,15 @@
 """Register a terminal — upsert the Terminal row when a terminal first connects."""
+
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from platform.core.logging import get_logger
+from platform.db.models import Terminal
+from platform.db.session import db_context
 from uuid import UUID
 
 from pydantic import BaseModel
 from sqlalchemy import select
-
-from platform.core.logging import get_logger
-from platform.db.models import Terminal
-from platform.db.session import db_context
 
 _log = get_logger(__name__)
 
@@ -40,7 +40,7 @@ async def handle_register_terminal(cmd: RegisterTerminalCommand) -> dict[str, st
                 adapter_kind=cmd.adapter_kind,
                 version=cmd.version,
                 status="online",
-                last_heartbeat_at=datetime.now(timezone.utc),
+                last_heartbeat_at=datetime.now(UTC),
                 symbols=cmd.symbols,
                 capabilities=cmd.capabilities,
             )
@@ -48,7 +48,7 @@ async def handle_register_terminal(cmd: RegisterTerminalCommand) -> dict[str, st
             _log.info("terminal_row_created", terminal_id=cmd.terminal_id, org_id=str(cmd.org_id))
         else:
             existing.status = "online"
-            existing.last_heartbeat_at = datetime.now(timezone.utc)
+            existing.last_heartbeat_at = datetime.now(UTC)
             if cmd.version:
                 existing.version = cmd.version
             if cmd.symbols:

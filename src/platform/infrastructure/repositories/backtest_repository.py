@@ -5,15 +5,15 @@ mutated twice during its lifecycle: when the worker picks it up (status →
 running) and when it completes (status → completed + results JSONB blob). The
 `update_status` method is the single mutation surface.
 """
+
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from platform.db.models import Backtest
 from uuid import UUID
 
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from platform.db.models import Backtest
 
 
 class BacktestRepository:
@@ -40,18 +40,26 @@ class BacktestRepository:
         return await self.db.get(Backtest, id)
 
     async def list_by_org(
-        self, org_id: UUID, *, limit: int = 50, offset: int = 0,
+        self,
+        org_id: UUID,
+        *,
+        limit: int = 50,
+        offset: int = 0,
     ) -> list[Backtest]:
         stmt = (
             select(Backtest)
             .where(Backtest.org_id == org_id)
             .order_by(Backtest.created_at.desc())
-            .limit(limit).offset(offset)
+            .limit(limit)
+            .offset(offset)
         )
         return list((await self.db.execute(stmt)).scalars().all())
 
     async def list_by_strategy(
-        self, strategy_id: UUID, *, limit: int = 50,
+        self,
+        strategy_id: UUID,
+        *,
+        limit: int = 50,
     ) -> list[Backtest]:
         stmt = (
             select(Backtest)
@@ -75,13 +83,16 @@ class BacktestRepository:
         return entity
 
     async def update_status(
-        self, id: UUID, status: str, results: dict | None = None,
+        self,
+        id: UUID,
+        status: str,
+        results: dict | None = None,
     ) -> bool:
         """Transition the backtest status. When status is terminal
         ('completed' / 'failed') the `results` blob should be supplied."""
         values: dict = {
             "status": status,
-            "updated_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(UTC),
         }
         if results is not None:
             values["results"] = results

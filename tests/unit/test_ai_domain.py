@@ -1,9 +1,6 @@
 """Test the AI domain — AIPrediction, AIConfidence, CompositeSignal, AIResult."""
+
 from __future__ import annotations
-
-from uuid import uuid4
-
-import pytest
 
 from platform.core.exceptions import DomainError
 from platform.domain.ai import (
@@ -16,7 +13,9 @@ from platform.domain.ai import (
     AIResult,
     CompositeSignal,
 )
+from uuid import uuid4
 
+import pytest
 
 # ── AIConfidence value object ────────────────────────────────────────────────
 
@@ -45,11 +44,15 @@ def test_ai_confidence_float_cast() -> None:
 # ── AIPrediction value object ────────────────────────────────────────────────
 
 
-def _make_pred(direction: AIDirection = AIDirection.BULLISH,
-               confidence: float = 0.8) -> AIPrediction:
+def _make_pred(
+    direction: AIDirection = AIDirection.BULLISH, confidence: float = 0.8
+) -> AIPrediction:
     return AIPrediction(
-        module="trend", symbol="XAUUSD", direction=direction,
-        confidence=AIConfidence(value=confidence), horizon=AIHorizon.SHORT,
+        module="trend",
+        symbol="XAUUSD",
+        direction=direction,
+        confidence=AIConfidence(value=confidence),
+        horizon=AIHorizon.SHORT,
     )
 
 
@@ -75,9 +78,11 @@ def test_composite_signal_rejects_score_out_of_range() -> None:
     pred = _make_pred()
     with pytest.raises(DomainError):
         CompositeSignal(
-            symbol="XAUUSD", score=1.5,
+            symbol="XAUUSD",
+            score=1.5,
             contributing_modules={"trend": pred},
-            dominant_direction=AIDirection.BULLISH, agreement_ratio=0.8,
+            dominant_direction=AIDirection.BULLISH,
+            agreement_ratio=0.8,
         )
 
 
@@ -86,9 +91,11 @@ def test_composite_signal_rejects_bad_agreement_ratio() -> None:
     pred = _make_pred()
     with pytest.raises(DomainError):
         CompositeSignal(
-            symbol="XAUUSD", score=0.5,
+            symbol="XAUUSD",
+            score=0.5,
             contributing_modules={"trend": pred},
-            dominant_direction=AIDirection.BULLISH, agreement_ratio=1.5,
+            dominant_direction=AIDirection.BULLISH,
+            agreement_ratio=1.5,
         )
 
 
@@ -96,9 +103,11 @@ def test_composite_signal_is_consensus_when_agreement_above_seventy_pct() -> Non
     """A 71% agreement ratio crosses the consensus threshold."""
     pred = _make_pred()
     sig = CompositeSignal(
-        symbol="XAUUSD", score=0.6,
+        symbol="XAUUSD",
+        score=0.6,
         contributing_modules={"trend": pred},
-        dominant_direction=AIDirection.BULLISH, agreement_ratio=0.71,
+        dominant_direction=AIDirection.BULLISH,
+        agreement_ratio=0.71,
     )
     assert sig.is_consensus
 
@@ -107,9 +116,11 @@ def test_composite_signal_not_consensus_at_low_agreement() -> None:
     """Below 70% agreement is not a consensus."""
     pred = _make_pred()
     sig = CompositeSignal(
-        symbol="XAUUSD", score=0.4,
+        symbol="XAUUSD",
+        score=0.4,
         contributing_modules={"trend": pred},
-        dominant_direction=AIDirection.BULLISH, agreement_ratio=0.5,
+        dominant_direction=AIDirection.BULLISH,
+        agreement_ratio=0.5,
     )
     assert not sig.is_consensus
 
@@ -119,7 +130,10 @@ def test_composite_signal_not_consensus_at_low_agreement() -> None:
 
 def _make_result(direction: AIDirection = AIDirection.BULLISH) -> AIResult:
     return AIResult(
-        org_id=uuid4(), module="trend", symbol="XAUUSD", timeframe="M15",
+        org_id=uuid4(),
+        module="trend",
+        symbol="XAUUSD",
+        timeframe="M15",
         prediction=_make_pred(direction, 0.8),
         confidence=AIConfidence(value=0.8),
         model_version="1.0.0",

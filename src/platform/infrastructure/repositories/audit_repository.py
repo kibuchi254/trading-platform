@@ -4,16 +4,15 @@ The audit log is write-heavy and never updated. The repository therefore
 exposes only `add` (from a dict-shaped entry, to keep the call site terse) and
 a small set of read filters used by the audit-trail UI.
 """
+
 from __future__ import annotations
 
-from datetime import datetime
+from platform.db.models import AuditLog
 from typing import Any
 from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from platform.db.models import AuditLog
 
 
 class AuditRepository:
@@ -58,19 +57,28 @@ class AuditRepository:
     # ── Reads ───────────────────────────────────────────────────────────────
 
     async def list_by_actor(
-        self, actor_id: UUID, *, limit: int = 100, offset: int = 0,
+        self,
+        actor_id: UUID,
+        *,
+        limit: int = 100,
+        offset: int = 0,
     ) -> list[AuditLog]:
         stmt = (
             select(AuditLog)
             .where(AuditLog.actor_id == actor_id)
             .order_by(AuditLog.ts.desc())
-            .limit(limit).offset(offset)
+            .limit(limit)
+            .offset(offset)
         )
         return list((await self.db.execute(stmt)).scalars().all())
 
     async def list_by_org(
-        self, org_id: UUID, *,
-        action: str | None = None, limit: int = 100, offset: int = 0,
+        self,
+        org_id: UUID,
+        *,
+        action: str | None = None,
+        limit: int = 100,
+        offset: int = 0,
     ) -> list[AuditLog]:
         stmt = select(AuditLog).where(AuditLog.org_id == org_id)
         if action:
@@ -79,8 +87,12 @@ class AuditRepository:
         return list((await self.db.execute(stmt)).scalars().all())
 
     async def list_by_action(
-        self, action: str, *, org_id: UUID | None = None,
-        limit: int = 100, offset: int = 0,
+        self,
+        action: str,
+        *,
+        org_id: UUID | None = None,
+        limit: int = 100,
+        offset: int = 0,
     ) -> list[AuditLog]:
         stmt = select(AuditLog).where(AuditLog.action == action)
         if org_id is not None:

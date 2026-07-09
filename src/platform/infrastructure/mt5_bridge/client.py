@@ -4,16 +4,17 @@ The application layer NEVER opens a WebSocket itself; it always goes through
 this client. This keeps the indirection in one place, so we can later swap
 WebSocket for gRPC / AMQP / FIX without touching use-case code.
 """
+
 from __future__ import annotations
 
 import uuid
-from typing import Any
-
-from platform.core.exceptions import TerminalOffline
 from platform.core.logging import get_logger
 from platform.infrastructure.mt5_bridge.command_queue import get_command_queue
 from platform.infrastructure.mt5_bridge.protocol import (
-    BridgeMessage, CommandType, PlaceOrderPayload, command,
+    BridgeMessage,
+    CommandType,
+    PlaceOrderPayload,
+    command,
 )
 from platform.infrastructure.mt5_bridge.registry import get_registry
 
@@ -44,9 +45,15 @@ class BridgeClient:
 
         payload = PlaceOrderPayload(
             client_order_id=client_order_id or f"atlas-{uuid.uuid4().hex[:12]}",
-            symbol=symbol, side=side, order_type=order_type, volume=volume,
-            price=price, stop_loss=stop_loss, take_profit=take_profit,
-            comment=comment, magic=magic,
+            symbol=symbol,
+            side=side,
+            order_type=order_type,
+            volume=volume,
+            price=price,
+            stop_loss=stop_loss,
+            take_profit=take_profit,
+            comment=comment,
+            magic=magic,
         ).model_dump(mode="json")
         # Make timestamps JSON-serializable
         cmd = command(CommandType.PLACE_ORDER, terminal_id=terminal_id, payload=payload)
@@ -67,7 +74,12 @@ class BridgeClient:
         return await get_command_queue().enqueue(cmd, timeout=timeout)
 
     async def close_position(
-        self, *, terminal_id: str, broker_position_id: str, volume: float | None = None, timeout: float = 10.0
+        self,
+        *,
+        terminal_id: str,
+        broker_position_id: str,
+        volume: float | None = None,
+        timeout: float = 10.0,
     ) -> BridgeMessage:
         registry = get_registry()
         rec = await registry.require(terminal_id)

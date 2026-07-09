@@ -4,10 +4,10 @@ Each AI module is a specialized analyst: trend, pattern, risk, sentiment, etc.
 The orchestrator fan-ins all module outputs and emits a single composite signal
 (or a ranked list) that the strategy engine can consume.
 """
+
 from __future__ import annotations
 
 import abc
-from dataclasses import dataclass
 from typing import Any
 from uuid import UUID
 
@@ -32,12 +32,12 @@ class AIContext(BaseModel):
 
 class AIModule(abc.ABC):
     """Base class for all AI modules."""
+
     name: str = "abstract"
     version: str = "1.0.0"
 
     @abc.abstractmethod
-    async def analyze(self, ctx: AIContext) -> AIPrediction:
-        ...
+    async def analyze(self, ctx: AIContext) -> AIPrediction: ...
 
 
 class TrendAI(AIModule):
@@ -46,6 +46,7 @@ class TrendAI(AIModule):
     In production: load ONNX model trained offline. Here: simple heuristic
     that demonstrates the SDK shape.
     """
+
     name = "trend"
     version = "1.0.0"
 
@@ -65,14 +66,18 @@ class TrendAI(AIModule):
             confidence = 0.3
 
         return AIPrediction(
-            module=self.name, symbol=ctx.symbol, direction=direction,
-            confidence=confidence, horizon="medium",
+            module=self.name,
+            symbol=ctx.symbol,
+            direction=direction,
+            confidence=confidence,
+            horizon="medium",
             payload={"ema_fast": ema_fast, "ema_slow": ema_slow, "adx": adx},
         )
 
 
 class RiskAI(AIModule):
     """Evaluates market volatility regime + suggests position sizing."""
+
     name = "risk"
     version = "1.0.0"
 
@@ -88,8 +93,12 @@ class RiskAI(AIModule):
             confidence = 0.5
             payload = {"regime": "normal", "suggested_size_factor": 1.0}
         return AIPrediction(
-            module=self.name, symbol=ctx.symbol, direction=direction,
-            confidence=confidence, horizon="short", payload=payload,
+            module=self.name,
+            symbol=ctx.symbol,
+            direction=direction,
+            confidence=confidence,
+            horizon="short",
+            payload=payload,
         )
 
 
@@ -100,14 +109,18 @@ class LLMTradingAssistant(AIModule):
     last week?" The LLM gets called with a context bundle (positions, recent
     trades, market regime) and returns plain text.
     """
+
     name = "llm_assistant"
     version = "1.0.0"
 
     async def analyze(self, ctx: AIContext) -> AIPrediction:
         # Real implementation calls self._call_llm(prompt) — see hybrid_ai.py
         return AIPrediction(
-            module=self.name, symbol=ctx.symbol, direction="neutral",
-            confidence=0.0, horizon="n/a",
+            module=self.name,
+            symbol=ctx.symbol,
+            direction="neutral",
+            confidence=0.0,
+            horizon="n/a",
             payload={"note": "LLM assistant returns free-form text, not predictions"},
         )
 
@@ -131,7 +144,7 @@ class AIOrchestrator:
         for name, module in self._modules.items():
             try:
                 results[name] = await module.analyze(ctx)
-            except Exception:  # noqa: BLE001
+            except Exception:
                 # One failing module should not poison the orchestrator
                 pass
         return results

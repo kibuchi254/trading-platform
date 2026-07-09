@@ -1,15 +1,21 @@
 """Test backtest metrics — pure functions, no I/O."""
+
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
+from platform.backtest.metrics import (
+    compute_avg_trade_duration,
+    compute_calibration,
+    compute_equity_curve,
+    compute_expectancy,
+    compute_max_drawdown,
+    compute_profit_factor,
+    compute_sharpe_ratio,
+    compute_sortino_ratio,
+    compute_win_rate,
+)
 
 import pytest
-
-from platform.backtest.metrics import (
-    compute_avg_trade_duration, compute_calibration, compute_equity_curve,
-    compute_expectancy, compute_max_drawdown, compute_profit_factor,
-    compute_sharpe_ratio, compute_sortino_ratio, compute_win_rate,
-)
 
 
 def test_empty_inputs_return_zero() -> None:
@@ -24,7 +30,7 @@ def test_empty_inputs_return_zero() -> None:
 
 
 def test_equity_curve_built_correctly() -> None:
-    base = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    base = datetime(2026, 1, 1, tzinfo=UTC)
     trades = [
         {"closed_at": base + timedelta(hours=1), "pnl": 100},
         {"closed_at": base + timedelta(hours=2), "pnl": -50},
@@ -38,10 +44,12 @@ def test_equity_curve_built_correctly() -> None:
 
 def test_max_drawdown_computed_correctly() -> None:
     """Equity: 100 → 150 → 80 → 120 → 200. Peak=150, trough=80 → dd=-46.67%."""
-    base = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    base = datetime(2026, 1, 1, tzinfo=UTC)
     curve = [
-        (base, 100), (base + timedelta(hours=1), 150),
-        (base + timedelta(hours=2), 80), (base + timedelta(hours=3), 120),
+        (base, 100),
+        (base + timedelta(hours=1), 150),
+        (base + timedelta(hours=2), 80),
+        (base + timedelta(hours=3), 120),
         (base + timedelta(hours=4), 200),
     ]
     dd = compute_max_drawdown(curve)
@@ -88,8 +96,12 @@ def test_sortino_higher_than_sharpe_for_asymmetric_returns() -> None:
 def test_expectancy_calculation() -> None:
     """6 trades: 4 wins avg $50, 2 losses avg $30. Expectancy = 50*0.667 - 30*0.333 = 23.33."""
     trades = [
-        {"pnl": 50}, {"pnl": 50}, {"pnl": 50}, {"pnl": 50},
-        {"pnl": -30}, {"pnl": -30},
+        {"pnl": 50},
+        {"pnl": 50},
+        {"pnl": 50},
+        {"pnl": 50},
+        {"pnl": -30},
+        {"pnl": -30},
     ]
     exp = compute_expectancy(trades)
     assert abs(exp - (50 * 4 / 6 - 30 * 2 / 6)) < 1e-6

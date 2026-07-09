@@ -1,13 +1,12 @@
 """AI REST router — query module predictions + LLM assistant."""
+
 from __future__ import annotations
-
-from uuid import UUID
-
-from fastapi import APIRouter, Depends
-from pydantic import BaseModel
 
 from platform.ai.orchestrator import AIContext, get_ai_orchestrator
 from platform.core.dependencies import CurrentUser, get_current_user
+
+from fastapi import APIRouter, Depends
+from pydantic import BaseModel
 
 router = APIRouter(prefix="/ai", tags=["ai"])
 
@@ -30,7 +29,9 @@ async def analyze(
     user: CurrentUser = Depends(get_current_user),
 ) -> AnalysisOut:
     orch = get_ai_orchestrator()
-    ctx = AIContext(org_id=user.org_id, symbol=req.symbol, timeframe=req.timeframe, features=req.features)
+    ctx = AIContext(
+        org_id=user.org_id, symbol=req.symbol, timeframe=req.timeframe, features=req.features
+    )
     results = await orch.analyze(ctx)
     score = orch.composite_score(results)
     return AnalysisOut(
@@ -54,6 +55,7 @@ async def chat(req: ChatRequest, user: CurrentUser = Depends(get_current_user)) 
     `platform/ai/modules/llm_assistant.py`).
     """
     from platform.core.config import get_settings
+
     settings = get_settings()
     if settings.llm_provider == "none":
         return {"reply": "LLM assistant is disabled. Set LLM_PROVIDER in .env."}

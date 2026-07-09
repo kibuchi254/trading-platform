@@ -4,18 +4,16 @@ Each command sent to a terminal gets a future. When the matching execution
 report (or ack) arrives, the future is resolved. If the terminal goes offline
 or the command times out, the future is rejected.
 """
+
 from __future__ import annotations
 
 import asyncio
-import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Any
-
+from datetime import UTC, datetime
 from platform.core.exceptions import CommandTimeout
 from platform.core.logging import get_logger
-from platform.core.telemetry import BRIDGE_COMMANDS, BRIDGE_COMMAND_LATENCY
-from platform.infrastructure.mt5_bridge.protocol import BridgeMessage, CommandType
+from platform.core.telemetry import BRIDGE_COMMAND_LATENCY, BRIDGE_COMMANDS
+from platform.infrastructure.mt5_bridge.protocol import BridgeMessage
 
 _log = get_logger(__name__)
 
@@ -24,7 +22,7 @@ _log = get_logger(__name__)
 class PendingCommand:
     command: BridgeMessage
     future: asyncio.Future[BridgeMessage]
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     timeout_seconds: float = 10.0
 
 
@@ -62,10 +60,14 @@ class CommandQueue:
         async def _timeout() -> None:
             try:
                 await asyncio.wait_for(future, timeout=timeout)
-            except asyncio.TimeoutError:
-                await self._fail(terminal_id, command.id, CommandTimeout(
-                    f"Command {command.t} timed out after {timeout}s",
-                ))
+            except TimeoutError:
+                await self._fail(
+                    terminal_id,
+                    command.id,
+                    CommandTimeout(
+                        f"Command {command.t} timed out after {timeout}s",
+                    ),
+                )
             except Exception:
                 pass  # future resolved normally
 
@@ -78,11 +80,15 @@ class CommandQueue:
             bucket = self._pending.get(terminal_id, {})
             pending = bucket.pop(command_id, None)
         if pending is None:
-            _log.warning("reply_for_unknown_command", terminal_id=terminal_id, command_id=command_id)
+            _log.warning(
+                "reply_for_unknown_command", terminal_id=terminal_id, command_id=command_id
+            )
             return
-        elapsed = (datetime.now(timezone.utc) - pending.created_at).total_seconds()
+        elapsed = (datetime.now(UTC) - pending.created_at).total_seconds()
         BRIDGE_COMMAND_LATENCY.labels(command=pending.command.t).observe(elapsed)
-        BRIDGE_COMMANDS.labels(command=pending.command.t, terminal_id=terminal_id, result="ok").inc()
+        BRIDGE_COMMANDS.labels(
+            command=pending.command.t, terminal_id=terminal_id, result="ok"
+        ).inc()
         if not pending.future.done():
             pending.future.set_result(reply)
 
@@ -91,10 +97,14 @@ class CommandQueue:
         async with self._lock:
             bucket = self._pending.pop(terminal_id, {})
         for cmd_id, pending in bucket.items():
-            BRIDGE_COMMANDS.labels(command=pending.command.t, terminal_id=terminal_id, result="error").inc()
+            BRIDGE_COMMANDS.labels(
+                command=pending.command.t, terminal_id=terminal_id, result="error"
+            ).inc()
             if not pending.future.done():
                 pending.future.set_exception(exc)
-            _log.warning("command_failed", terminal_id=terminal_id, command_id=cmd_id, error=str(exc))
+            _log.warning(
+                "command_failed", terminal_id=terminal_id, command_id=cmd_id, error=str(exc)
+            )
 
     async def _fail(self, terminal_id: str, command_id: str, exc: Exception) -> None:
         async with self._lock:
@@ -102,7 +112,9 @@ class CommandQueue:
             pending = bucket.pop(command_id, None)
         if pending is None:
             return
-        BRIDGE_COMMANDS.labels(command=pending.command.t, terminal_id=terminal_id, result="timeout").inc()
+        BRIDGE_COMMANDS.labels(
+            command=pending.command.t, terminal_id=terminal_id, result="timeout"
+        ).inc()
         if not pending.future.done():
             pending.future.set_exception(exc)
 

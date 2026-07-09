@@ -1,9 +1,6 @@
 """Test PatternAI — candlestick pattern detection (doji, hammer, engulfing, star)."""
+
 from __future__ import annotations
-
-from uuid import uuid4
-
-import pytest
 
 from platform.ai.modules.pattern import (
     PatternAI,
@@ -13,6 +10,7 @@ from platform.ai.modules.pattern import (
     detect_star,
 )
 from platform.ai.orchestrator import AIContext
+from uuid import uuid4
 
 
 def _ctx(symbol: str = "XAUUSD") -> AIContext:

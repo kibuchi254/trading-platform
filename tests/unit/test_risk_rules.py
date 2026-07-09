@@ -6,32 +6,42 @@ expected. Database access is monkeypatched per-test via a fake
 async-context-manager so the rules can be exercised without a live
 PostgreSQL instance.
 """
+
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from datetime import UTC
+from platform.core.exceptions import RiskLimitBreached
+from platform.risk.engine import OrderContext
 from uuid import uuid4
 
 import pytest
-
-from platform.core.exceptions import RiskLimitBreached
-from platform.risk.engine import OrderContext
 
 
 def _ctx(**overrides) -> OrderContext:
     """Build an OrderContext with sensible defaults for tests."""
     defaults = dict(
-        org_id=uuid4(), terminal_id="t1", symbol="XAUUSD",
-        side="buy", volume=0.10, price=2000.0,
+        org_id=uuid4(),
+        terminal_id="t1",
+        symbol="XAUUSD",
+        side="buy",
+        volume=0.10,
+        price=2000.0,
     )
     defaults.update(overrides)
     return OrderContext(**defaults)
 
 
-def _fake_session_factory(*, total_open: int = 0, sym_open: int = 0,
-                          rows=None, contract_size: float = 1.0,
-                          open_symbols: list[str] | None = None,
-                          candle_closes_by_sym: dict[str, list[float]] | None = None,
-                          pnls: list[float] | None = None):
+def _fake_session_factory(
+    *,
+    total_open: int = 0,
+    sym_open: int = 0,
+    rows=None,
+    contract_size: float = 1.0,
+    open_symbols: list[str] | None = None,
+    candle_closes_by_sym: dict[str, list[float]] | None = None,
+    pnls: list[float] | None = None,
+):
     """Build a fake async-context-manager that yields a mock AsyncSession.
 
     The session's `execute()` returns a result object whose helpers
@@ -76,6 +86,7 @@ def _fake_session_factory(*, total_open: int = 0, sym_open: int = 0,
                         # _load_closes directly when they need per-symbol data.
                         return list(next(iter(candle_closes_by_sym.values())))
                     return []
+
             return _S()
 
     class FakeSession:
@@ -178,10 +189,10 @@ async def test_sector_exposure_allows_balanced_book(monkeypatch) -> None:
 
     # Balanced book: FX, metals, indices, energy each ~equal notional.
     rows = [
-        ("EURUSD", 1.0, 1.0),    # fx: 1.0
+        ("EURUSD", 1.0, 1.0),  # fx: 1.0
         ("XAUUSD", 0.001, 1000.0),  # metals: 1.0
         ("US30", 0.001, 1000.0),  # indices: 1.0
-        ("XTIUSD", 1.0, 1.0),    # energy: 1.0
+        ("XTIUSD", 1.0, 1.0),  # energy: 1.0
     ]
     fake_db = _fake_session_factory(rows=rows)
     monkeypatch.setattr("platform.risk.rules.sector_exposure.db_context", fake_db)
@@ -237,6 +248,7 @@ async def test_correlation_risk_allows_uncorrelated_symbols(monkeypatch) -> None
             # Constant series → zero variance → correlation() returns 0.0.
             return [100.0] * 50
         return [200.0 - i for i in range(50)]
+
     rule._load_closes = fake_load_closes  # type: ignore[assignment]
 
     await rule.evaluate(_ctx(symbol="XAUUSD"))
@@ -252,6 +264,7 @@ async def test_correlation_risk_blocks_highly_correlated_symbols(monkeypatch) ->
 
     async def fake_load_closes(session, symbol):
         return [100.0 + i for i in range(50)]  # identical series → corr=1.0
+
     rule._load_closes = fake_load_closes  # type: ignore[assignment]
 
     with pytest.raises(RiskLimitBreached):
@@ -271,12 +284,14 @@ async def test_correlation_risk_no_op_without_open_positions(monkeypatch) -> Non
 def test_correlation_helper_returns_zero_for_short_series() -> None:
     """<2 data points → 0.0 (degenerate)."""
     from platform.risk.rules.correlation_risk import correlation
+
     assert correlation([1.0], [2.0]) == 0.0
 
 
 def test_correlation_helper_returns_one_for_identical_series() -> None:
     """Identical series → perfect positive correlation."""
     from platform.risk.rules.correlation_risk import correlation
+
     a = [1.0, 2.0, 3.0, 4.0, 5.0]
     assert correlation(a, a) == pytest.approx(1.0)
 
@@ -341,15 +356,16 @@ def test_news_lock_symbol_to_currency_mapping() -> None:
 
 async def test_news_lock_blocks_inside_blackout_window() -> None:
     """An order within the news blackout window raises RiskLimitBreached."""
-    from datetime import datetime, timedelta, timezone
-
+    from datetime import datetime, timedelta
     from platform.risk.rules.news_lock import NewsLockRule
 
     rule = NewsLockRule(blackout_before_minutes=5, blackout_after_minutes=15)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     rule.add_event(
         ts=now + timedelta(minutes=2),  # event in 2 min — we're inside pre-event blackout
-        currency="USD", impact="high", description="NFP",
+        currency="USD",
+        impact="high",
+        description="NFP",
     )
     with pytest.raises(RiskLimitBreached):
         await rule.evaluate(_ctx(symbol="XAUUSD"))  # XAUUSD → USD
@@ -357,45 +373,48 @@ async def test_news_lock_blocks_inside_blackout_window() -> None:
 
 async def test_news_lock_allows_outside_blackout_window() -> None:
     """An order well outside any blackout window passes."""
-    from datetime import datetime, timedelta, timezone
-
+    from datetime import datetime, timedelta
     from platform.risk.rules.news_lock import NewsLockRule
 
     rule = NewsLockRule(blackout_before_minutes=5, blackout_after_minutes=15)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     rule.add_event(
         ts=now + timedelta(hours=2),  # event in 2 hours — outside blackout
-        currency="USD", impact="high", description="FOMC",
+        currency="USD",
+        impact="high",
+        description="FOMC",
     )
     await rule.evaluate(_ctx(symbol="XAUUSD"))  # should not raise
 
 
 async def test_news_lock_ignores_low_impact_events_by_default() -> None:
     """Low-impact events don't trigger the blackout when high_impact_only=True."""
-    from datetime import datetime, timedelta, timezone
-
+    from datetime import datetime, timedelta
     from platform.risk.rules.news_lock import NewsLockRule
 
     rule = NewsLockRule(high_impact_only=True)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     rule.add_event(
-        ts=now + timedelta(minutes=2), currency="USD",
-        impact="low", description="Minor data",
+        ts=now + timedelta(minutes=2),
+        currency="USD",
+        impact="low",
+        description="Minor data",
     )
     await rule.evaluate(_ctx(symbol="XAUUSD"))  # should not raise
 
 
 def test_news_lock_purge_old_events_drops_elapsed() -> None:
     """purge_old_events drops events whose blackout window has elapsed."""
-    from datetime import datetime, timedelta, timezone
-
+    from datetime import datetime, timedelta
     from platform.risk.rules.news_lock import NewsLockRule
 
     rule = NewsLockRule(blackout_after_minutes=15)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     rule.add_event(
-        ts=now - timedelta(hours=2), currency="USD",
-        impact="high", description="Old news",
+        ts=now - timedelta(hours=2),
+        currency="USD",
+        impact="high",
+        description="Old news",
     )
     rule.purge_old_events()
     assert rule._events == []
@@ -452,18 +471,21 @@ async def test_volatility_lock_fails_open_without_atr_data() -> None:
 def test_kelly_helper_zero_for_zero_loss() -> None:
     """avg_loss ≤ 0 → 0.0 (degenerate)."""
     from platform.risk.rules.kelly_sizing import kelly
+
     assert kelly(0.6, avg_win=2.0, avg_loss=0.0) == 0.0
 
 
 def test_kelly_helper_zero_for_zero_win_rate() -> None:
     """win_rate ≤ 0 → 0.0."""
     from platform.risk.rules.kelly_sizing import kelly
+
     assert kelly(0.0, avg_win=2.0, avg_loss=1.0) == 0.0
 
 
 def test_kelly_helper_clamps_to_one() -> None:
     """Full Kelly cannot exceed 1.0."""
     from platform.risk.rules.kelly_sizing import kelly
+
     f = kelly(0.99, avg_win=10.0, avg_loss=1.0)
     assert 0.0 <= f <= 1.0
 
@@ -476,8 +498,7 @@ async def test_kelly_sizing_never_rejects(monkeypatch) -> None:
     monkeypatch.setattr("platform.risk.rules.kelly_sizing.db_context", fake_db)
     rule = KellySizingRule(cap_fraction=0.25, min_trades_for_stats=20)
     ctx = _ctx(volume=0.10)
-    ctx.meta = {"strategy_id": uuid4(), "account_equity": 10_000.0,
-                "stop_distance": 0.01}  # type: ignore[attr-defined]
+    ctx.meta = {"strategy_id": uuid4(), "account_equity": 10_000.0, "stop_distance": 0.01}  # type: ignore[attr-defined]
     await rule.evaluate(ctx)
     suggestion = rule.get_suggestion(ctx.terminal_id, ctx.symbol)
     assert suggestion is not None
@@ -488,8 +509,7 @@ async def test_kelly_sizing_uses_defaults_without_strategy_id() -> None:
     """Without a strategy_id, the rule uses default win_rate / payoff."""
     from platform.risk.rules.kelly_sizing import KellySizingRule
 
-    rule = KellySizingRule(cap_fraction=0.25, default_win_rate=0.5,
-                            default_payoff=1.5)
+    rule = KellySizingRule(cap_fraction=0.25, default_win_rate=0.5, default_payoff=1.5)
     ctx = _ctx(volume=1.0)
     ctx.meta = {}  # type: ignore[attr-defined]
     await rule.evaluate(ctx)

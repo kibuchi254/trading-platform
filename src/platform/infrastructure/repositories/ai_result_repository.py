@@ -5,18 +5,22 @@ aggregate. The aggregate owns its feedback / ground-truth lifecycle; the
 repository exposes a thin `add_feedback` shortcut used by the feedback API
 endpoint (the canonical path is `aggregate.add_feedback(...)` then `save`).
 """
+
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
-from uuid import UUID
-
-from sqlalchemy import select, update
-from sqlalchemy.ext.asyncio import AsyncSession
-
+from datetime import UTC, datetime, timedelta
 from platform.db.models import AIResult as AIResultModel
 from platform.domain.ai import (
-    AIConfidence, AIDirection, AIFeedback, AIPrediction, AIResult,
+    AIConfidence,
+    AIDirection,
+    AIFeedback,
+    AIPrediction,
+    AIResult,
 )
+from uuid import UUID
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 class AIResultRepository:
@@ -39,10 +43,13 @@ class AIResultRepository:
             symbol=m.symbol or "",
             timeframe=m.timeframe,
             prediction=AIPrediction(
-                module=m.module, symbol=m.symbol or "",
-                direction=direction, confidence=confidence,
+                module=m.module,
+                symbol=m.symbol or "",
+                direction=direction,
+                confidence=confidence,
                 payload=prediction_payload,
-                model_version=m.model_version, input_hash=m.input_hash,
+                model_version=m.model_version,
+                input_hash=m.input_hash,
                 created_at=m.created_at,
             ),
             confidence=confidence,
@@ -80,7 +87,11 @@ class AIResultRepository:
         return self.to_domain(m) if m else None
 
     async def list_by_module(
-        self, org_id: UUID, module: str, *, limit: int = 100,
+        self,
+        org_id: UUID,
+        module: str,
+        *,
+        limit: int = 100,
     ) -> list[AIResult]:
         stmt = (
             select(AIResultModel)
@@ -92,7 +103,11 @@ class AIResultRepository:
         return [self.to_domain(r) for r in rows]
 
     async def list_by_symbol(
-        self, org_id: UUID, symbol: str, *, limit: int = 100,
+        self,
+        org_id: UUID,
+        symbol: str,
+        *,
+        limit: int = 100,
     ) -> list[AIResult]:
         stmt = (
             select(AIResultModel)
@@ -104,9 +119,13 @@ class AIResultRepository:
         return [self.to_domain(r) for r in rows]
 
     async def list_recent_by_org(
-        self, org_id: UUID, *, since: datetime | None = None, limit: int = 100,
+        self,
+        org_id: UUID,
+        *,
+        since: datetime | None = None,
+        limit: int = 100,
     ) -> list[AIResult]:
-        cutoff = since or (datetime.now(timezone.utc) - timedelta(hours=24))
+        cutoff = since or (datetime.now(UTC) - timedelta(hours=24))
         stmt = (
             select(AIResultModel)
             .where(AIResultModel.org_id == org_id, AIResultModel.created_at >= cutoff)
@@ -124,12 +143,16 @@ class AIResultRepository:
         return entity
 
     async def add_feedback(
-        self, id: UUID, rating: str, notes: str | None = None,
+        self,
+        id: UUID,
+        rating: str,
+        notes: str | None = None,
     ) -> bool:
         """Persist operator feedback into the prediction JSONB blob."""
         rating_enum = AIFeedback(rating)
         if rating_enum == AIFeedback.NONE and notes:
             from platform.core.exceptions import DomainError
+
             raise DomainError("Cannot attach notes to NONE feedback")
         # Merge feedback into the JSONB prediction column via key->'feedback'.
         m = await self.db.get(AIResultModel, id)

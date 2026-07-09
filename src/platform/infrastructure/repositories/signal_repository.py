@@ -5,19 +5,22 @@ their status flips through PENDING → EVALUATED → EXECUTED/REJECTED/EXPIRED.
 This repository therefore exposes `add` but no `save` (mutations go through
 explicit status-update paths in the application layer).
 """
+
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
+from platform.db.models import Signal as SignalModel
+from platform.domain.shared import Price, Symbol, Timeframe
+from platform.domain.strategy import (
+    Signal,
+    SignalSide,
+    SignalSource,
+    SignalStrength,
+)
 from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from platform.db.models import Signal as SignalModel
-from platform.domain.shared import Price, Symbol, Timeframe
-from platform.domain.strategy import (
-    Signal, SignalSide, SignalSource, SignalStrength,
-)
 
 
 class SignalRepository:
@@ -71,7 +74,10 @@ class SignalRepository:
         return self.to_domain(m) if m else None
 
     async def list_by_strategy(
-        self, strategy_id: UUID, *, limit: int = 100,
+        self,
+        strategy_id: UUID,
+        *,
+        limit: int = 100,
     ) -> list[Signal]:
         stmt = (
             select(SignalModel)
@@ -83,9 +89,13 @@ class SignalRepository:
         return [self.to_domain(r) for r in rows]
 
     async def list_recent_by_org(
-        self, org_id: UUID, *, since: datetime | None = None, limit: int = 100,
+        self,
+        org_id: UUID,
+        *,
+        since: datetime | None = None,
+        limit: int = 100,
     ) -> list[Signal]:
-        cutoff = since or (datetime.now(timezone.utc) - timedelta(hours=24))
+        cutoff = since or (datetime.now(UTC) - timedelta(hours=24))
         stmt = (
             select(SignalModel)
             .where(SignalModel.org_id == org_id, SignalModel.created_at >= cutoff)
@@ -96,7 +106,11 @@ class SignalRepository:
         return [self.to_domain(r) for r in rows]
 
     async def list_by_symbol(
-        self, org_id: UUID, symbol: str, *, limit: int = 100,
+        self,
+        org_id: UUID,
+        symbol: str,
+        *,
+        limit: int = 100,
     ) -> list[Signal]:
         stmt = (
             select(SignalModel)

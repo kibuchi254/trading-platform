@@ -1,16 +1,16 @@
 """Force terminal account sync — pull balance/equity/margin from MT5."""
+
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from uuid import UUID
-
-from pydantic import BaseModel
-from sqlalchemy import select
-
+from datetime import UTC, datetime
 from platform.core.exceptions import NotFoundError
 from platform.db.models import Account, Terminal
 from platform.db.session import db_context
 from platform.infrastructure.mt5_bridge.client import get_bridge_client
+from uuid import UUID
+
+from pydantic import BaseModel
+from sqlalchemy import select
 
 
 class SyncAccountCommand(BaseModel):
@@ -47,7 +47,8 @@ async def handle_sync_account(cmd: SyncAccountCommand) -> SyncAccountResult:
         acct = (await db.execute(acct_stmt)).scalar_one_or_none()
         if acct is None:
             acct = Account(
-                org_id=cmd.org_id, terminal_id=terminal.id,
+                org_id=cmd.org_id,
+                terminal_id=terminal.id,
                 broker_login=terminal.broker_account,
                 currency=payload.get("currency", "USD"),
                 leverage=int(payload.get("leverage", 100)),
@@ -59,7 +60,7 @@ async def handle_sync_account(cmd: SyncAccountCommand) -> SyncAccountResult:
         acct.free_margin = float(payload["free_margin"])
         acct.currency = payload.get("currency", acct.currency)
         acct.leverage = int(payload.get("leverage", acct.leverage))
-        acct.last_synced_at = datetime.now(timezone.utc)
+        acct.last_synced_at = datetime.now(UTC)
         await db.commit()
 
     return SyncAccountResult(

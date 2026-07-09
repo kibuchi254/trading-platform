@@ -11,10 +11,10 @@ Symbols are mapped to a base currency via :func:`symbol_to_currency`
 Events are injected via :meth:`add_event`; :meth:`purge_old_events`
 should be called periodically to keep the in-memory list bounded.
 """
+
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
-
+from datetime import UTC, datetime, timedelta
 from platform.core.exceptions import RiskLimitBreached
 from platform.core.logging import get_logger
 from platform.risk.engine import OrderContext, RiskRule
@@ -89,7 +89,7 @@ class NewsLockRule(RiskRule):
             Human-readable label (e.g. ``"Non-Farm Employment Change"``).
         """
         if ts.tzinfo is None:
-            ts = ts.replace(tzinfo=timezone.utc)
+            ts = ts.replace(tzinfo=UTC)
         self._events.append((ts, currency.upper(), impact.lower(), description))
 
     def purge_old_events(self) -> None:
@@ -98,7 +98,7 @@ class NewsLockRule(RiskRule):
         Call this from a periodic task (e.g. every minute) to keep the
         in-memory list bounded.
         """
-        cutoff = datetime.now(timezone.utc) - self.blackout_after
+        cutoff = datetime.now(UTC) - self.blackout_after
         before = len(self._events)
         self._events = [e for e in self._events if e[0] > cutoff]
         dropped = before - len(self._events)
@@ -114,7 +114,7 @@ class NewsLockRule(RiskRule):
             If the order's currency has a high-impact (or, when configured,
             medium-impact) news event within the blackout window.
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         currency = symbol_to_currency(ctx.symbol)
         window_start = now - self.blackout_before
         window_end = now + self.blackout_after

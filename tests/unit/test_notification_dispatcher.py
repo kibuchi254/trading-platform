@@ -1,9 +1,12 @@
 """Test the NotificationDispatcher with a fake channel + retry logic."""
+
 from __future__ import annotations
 
-import pytest
-
-from platform.notifications.base import NotificationChannel, NotificationDispatcher, NotificationMessage
+from platform.notifications.base import (
+    NotificationChannel,
+    NotificationDispatcher,
+    NotificationMessage,
+)
 
 
 class FakeChannel(NotificationChannel):

@@ -6,6 +6,7 @@ ratio of average win to average loss, then applies a fractional cap
 capped fraction into a per-trade risk budget and a suggested volume
 assuming a configurable stop distance.
 """
+
 from __future__ import annotations
 
 from platform.ai.orchestrator import AIContext, AIModule, AIPrediction
@@ -41,6 +42,7 @@ class PositionSizeAI(AIModule):
     fraction, a per-trade risk budget, and a suggested volume. Direction
     is bullish when a positive Kelly edge exists, neutral otherwise.
     """
+
     name = "position_size"
     version = "1.0.0"
 
@@ -53,11 +55,18 @@ class PositionSizeAI(AIModule):
         stop_distance = max(float(ctx.features.get("stop_distance", 0.01)), 1e-9)
         if equity <= 0:
             return AIPrediction(
-                module=self.name, symbol=ctx.symbol, direction="neutral",
-                confidence=0.1, horizon="short",
-                payload={"kelly_fraction": 0.0, "capped_fraction": 0.0,
-                         "suggested_volume": 0.0, "risk_per_trade": 0.0,
-                         "error": "no equity"},
+                module=self.name,
+                symbol=ctx.symbol,
+                direction="neutral",
+                confidence=0.1,
+                horizon="short",
+                payload={
+                    "kelly_fraction": 0.0,
+                    "capped_fraction": 0.0,
+                    "suggested_volume": 0.0,
+                    "risk_per_trade": 0.0,
+                    "error": "no equity",
+                },
             )
         full = kelly_fraction(win_rate, avg_win, avg_loss)
         capped = cap_kelly(full, cap=cap)
@@ -65,8 +74,11 @@ class PositionSizeAI(AIModule):
         suggested_volume = risk_per_trade / (equity * stop_distance)
         direction = "bullish" if capped > 0 else "neutral"
         return AIPrediction(
-            module=self.name, symbol=ctx.symbol, direction=direction,
-            confidence=min(1.0, capped * 4.0), horizon="short",
+            module=self.name,
+            symbol=ctx.symbol,
+            direction=direction,
+            confidence=min(1.0, capped * 4.0),
+            horizon="short",
             payload={
                 "kelly_fraction": round(full, 4),
                 "capped_fraction": round(capped, 4),

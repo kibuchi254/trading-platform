@@ -1,11 +1,8 @@
 """Test the Identity domain — Organization, User, APIKey aggregates."""
+
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
-from uuid import uuid4
-
-import pytest
-
+from datetime import UTC, datetime, timedelta
 from platform.core.exceptions import DomainError
 from platform.domain.identity import (
     APIKey,
@@ -17,7 +14,9 @@ from platform.domain.identity import (
     User,
     UserRole,
 )
+from uuid import uuid4
 
+import pytest
 
 # ── Email value object ───────────────────────────────────────────────────────
 
@@ -148,8 +147,10 @@ def test_org_requires_name_and_slug() -> None:
 
 def _make_user(role: UserRole = UserRole.TRADER) -> User:
     return User(
-        org_id=uuid4(), email=Email(address="trader@example.com"),
-        display_name="Trader Joe", role=role,
+        org_id=uuid4(),
+        email=Email(address="trader@example.com"),
+        display_name="Trader Joe",
+        role=role,
     )
 
 
@@ -232,8 +233,7 @@ def test_user_grant_and_revoke_scope() -> None:
 def test_user_requires_display_name() -> None:
     """Empty display_name raises DomainError."""
     with pytest.raises(DomainError):
-        User(org_id=uuid4(), email=Email(address="x@example.com"),
-             display_name="   ")
+        User(org_id=uuid4(), email=Email(address="x@example.com"), display_name="   ")
 
 
 # ── APIKey aggregate ─────────────────────────────────────────────────────────
@@ -241,7 +241,9 @@ def test_user_requires_display_name() -> None:
 
 def _make_apikey() -> APIKey:
     return APIKey(
-        org_id=uuid4(), user_id=uuid4(), name="prod-key",
+        org_id=uuid4(),
+        user_id=uuid4(),
+        name="prod-key",
         key_prefix=APIKeyPrefix(value="atlas123"),
         key_hash="$2b$12$somefakehashfor testing purposes only abcd",
     )
@@ -269,10 +271,12 @@ def test_apikey_revoke_marks_invalid_idempotently() -> None:
 def test_apikey_is_expired_when_expires_at_in_past() -> None:
     """An expired key is invalid even if not revoked."""
     k = APIKey(
-        org_id=uuid4(), user_id=uuid4(), name="expired-key",
+        org_id=uuid4(),
+        user_id=uuid4(),
+        name="expired-key",
         key_prefix=APIKeyPrefix(value="atlas456"),
         key_hash="hashvalue",
-        expires_at=datetime.now(timezone.utc) - timedelta(days=1),
+        expires_at=datetime.now(UTC) - timedelta(days=1),
     )
     assert k.is_expired is True
     assert k.is_valid is False
@@ -281,10 +285,12 @@ def test_apikey_is_expired_when_expires_at_in_past() -> None:
 def test_apikey_not_expired_when_expires_at_in_future() -> None:
     """Future expiry → key still valid."""
     k = APIKey(
-        org_id=uuid4(), user_id=uuid4(), name="future-key",
+        org_id=uuid4(),
+        user_id=uuid4(),
+        name="future-key",
         key_prefix=APIKeyPrefix(value="atlas789"),
         key_hash="hashvalue",
-        expires_at=datetime.now(timezone.utc) + timedelta(days=30),
+        expires_at=datetime.now(UTC) + timedelta(days=30),
     )
     assert k.is_expired is False
     assert k.is_valid is True
@@ -303,8 +309,18 @@ def test_apikey_touch_updates_last_used_and_emits_event() -> None:
 def test_apikey_requires_name_and_hash() -> None:
     """Empty name or hash raises DomainError."""
     with pytest.raises(DomainError):
-        APIKey(org_id=uuid4(), user_id=uuid4(), name="",
-               key_prefix=APIKeyPrefix(value="atlas001"), key_hash="x")
+        APIKey(
+            org_id=uuid4(),
+            user_id=uuid4(),
+            name="",
+            key_prefix=APIKeyPrefix(value="atlas001"),
+            key_hash="x",
+        )
     with pytest.raises(DomainError):
-        APIKey(org_id=uuid4(), user_id=uuid4(), name="x",
-               key_prefix=APIKeyPrefix(value="atlas001"), key_hash="")
+        APIKey(
+            org_id=uuid4(),
+            user_id=uuid4(),
+            name="x",
+            key_prefix=APIKeyPrefix(value="atlas001"),
+            key_hash="",
+        )

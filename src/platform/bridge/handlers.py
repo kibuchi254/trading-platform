@@ -3,20 +3,25 @@
 Each handler takes a BridgeMessage and the session it arrived on. Handlers
 must be fast: they offload persistence to a worker pool via the event bus.
 """
-from __future__ import annotations
 
-import asyncio
-from typing import TYPE_CHECKING
+from __future__ import annotations
 
 from platform.core.logging import get_logger
 from platform.events.bus import get_event_bus
 from platform.events.topics import Topic
 from platform.infrastructure.mt5_bridge.command_queue import get_command_queue
 from platform.infrastructure.mt5_bridge.protocol import (
-    AccountUpdatePayload, BridgeMessage, EventType, ExecutionReportPayload,
-    HeartbeatPayload, PositionUpdatePayload, RegisterPayload, TickPayload,
+    AccountUpdatePayload,
+    BridgeMessage,
+    EventType,
+    ExecutionReportPayload,
+    HeartbeatPayload,
+    PositionUpdatePayload,
+    RegisterPayload,
+    TickPayload,
 )
 from platform.infrastructure.mt5_bridge.registry import TerminalRecord, get_registry
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from platform.bridge.session import BridgeSession
@@ -24,9 +29,10 @@ if TYPE_CHECKING:
 _log = get_logger(__name__)
 
 
-async def handle_register(msg: BridgeMessage, session: "BridgeSession") -> None:
+async def handle_register(msg: BridgeMessage, session: BridgeSession) -> None:
     payload = RegisterPayload(**msg.payload)
     from platform.core.config import get_settings
+
     settings = get_settings()
     if payload.auth_token != settings.bridge_auth_token.get_secret_value():
         _log.warning("register_bad_token", terminal_id=payload.terminal_id)
@@ -49,17 +55,21 @@ async def handle_register(msg: BridgeMessage, session: "BridgeSession") -> None:
     bus = get_event_bus()
     await bus.publish(
         Topic.TERMINAL_EVENTS,
-        {"type": "terminal_registered", "terminal_id": payload.terminal_id, "broker": payload.broker},
+        {
+            "type": "terminal_registered",
+            "terminal_id": payload.terminal_id,
+            "broker": payload.broker,
+        },
     )
 
 
-async def handle_heartbeat(msg: BridgeMessage, session: "BridgeSession") -> None:
+async def handle_heartbeat(msg: BridgeMessage, session: BridgeSession) -> None:
     payload = HeartbeatPayload(**msg.payload)
     registry = get_registry()
     await registry.heartbeat(payload.terminal_id)
 
 
-async def handle_tick(msg: BridgeMessage, session: "BridgeSession") -> None:
+async def handle_tick(msg: BridgeMessage, session: BridgeSession) -> None:
     payload = TickPayload(**msg.payload)
     bus = get_event_bus()
     # Ticks are hot — fan out to subscribers (market data engine, strategies, AI)
@@ -77,7 +87,7 @@ async def handle_tick(msg: BridgeMessage, session: "BridgeSession") -> None:
     )
 
 
-async def handle_execution_report(msg: BridgeMessage, session: "BridgeSession") -> None:
+async def handle_execution_report(msg: BridgeMessage, session: BridgeSession) -> None:
     """Terminal reports an order state change.
 
     Resolves the pending command (if any) AND publishes a domain event
@@ -104,7 +114,7 @@ async def handle_execution_report(msg: BridgeMessage, session: "BridgeSession") 
     )
 
 
-async def handle_position_update(msg: BridgeMessage, session: "BridgeSession") -> None:
+async def handle_position_update(msg: BridgeMessage, session: BridgeSession) -> None:
     payload = PositionUpdatePayload(**msg.payload)
     bus = get_event_bus()
     await bus.publish(
@@ -126,7 +136,7 @@ async def handle_position_update(msg: BridgeMessage, session: "BridgeSession") -
     )
 
 
-async def handle_account_update(msg: BridgeMessage, session: "BridgeSession") -> None:
+async def handle_account_update(msg: BridgeMessage, session: BridgeSession) -> None:
     payload = AccountUpdatePayload(**msg.payload)
     bus = get_event_bus()
     await bus.publish(
@@ -143,7 +153,7 @@ async def handle_account_update(msg: BridgeMessage, session: "BridgeSession") ->
     )
 
 
-async def handle_error(msg: BridgeMessage, session: "BridgeSession") -> None:
+async def handle_error(msg: BridgeMessage, session: BridgeSession) -> None:
     _log.error("terminal_error", terminal_id=msg.terminal_id, payload=msg.payload)
 
 
@@ -165,12 +175,12 @@ HANDLERS: dict[str, callable] = {  # type: ignore[type-arg]
 }
 
 
-async def dispatch(msg: BridgeMessage, session: "BridgeSession") -> None:
+async def dispatch(msg: BridgeMessage, session: BridgeSession) -> None:
     handler = HANDLERS.get(msg.t)
     if handler is None:
         _log.warning("no_handler_for_event", type=msg.t, terminal_id=msg.terminal_id)
         return
     try:
         await handler(msg, session)
-    except Exception:  # noqa: BLE001
+    except Exception:
         _log.exception("handler_error", type=msg.t, terminal_id=msg.terminal_id)

@@ -48,14 +48,13 @@ called recursively from within the lock without re-acquiring it. The tick
 publish to the event bus happens *outside* the lock to avoid blocking other
 operations during pub/sub fan-out.
 """
+
 from __future__ import annotations
 
 import asyncio
 import random
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Any
-
+from datetime import UTC, datetime
 from platform.core.logging import get_logger
 from platform.events.bus import get_event_bus
 from platform.events.topics import Topic
@@ -66,6 +65,7 @@ from platform.infrastructure.execution.adapter_base import (
     OrderRequest,
     PositionSnapshot,
 )
+from typing import Any
 
 _log = get_logger(__name__)
 
@@ -80,7 +80,7 @@ class Tick:
     symbol: str
     bid: float
     ask: float
-    ts: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    ts: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     @property
     def mid(self) -> float:
@@ -189,7 +189,7 @@ class PaperBrokerAdapter(ExecutionAdapter):
             return self._place_order_locked(req)
 
     def _place_order_locked(self, req: OrderRequest) -> ExecutionReport:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         broker_order_id = self._generate_id("PBO")
 
         if req.volume <= 0:
@@ -301,14 +301,14 @@ class PaperBrokerAdapter(ExecutionAdapter):
 
         triggered = False
         if req.order_type == "limit":
-            if req.side == "buy" and tick.ask <= req.price:
-                triggered = True
-            elif req.side == "sell" and tick.bid >= req.price:
+            if (req.side == "buy" and tick.ask <= req.price) or (
+                req.side == "sell" and tick.bid >= req.price
+            ):
                 triggered = True
         elif req.order_type in ("stop", "stop_limit"):
-            if req.side == "buy" and tick.ask >= req.price:
-                triggered = True
-            elif req.side == "sell" and tick.bid <= req.price:
+            if (req.side == "buy" and tick.ask >= req.price) or (
+                req.side == "sell" and tick.bid <= req.price
+            ):
                 triggered = True
 
         if not triggered:
@@ -322,7 +322,7 @@ class PaperBrokerAdapter(ExecutionAdapter):
         else:  # stop / stop_limit
             fill_price = tick.ask if req.side == "buy" else tick.bid
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         broker_execution_id = self._generate_id("PBX")
         self._apply_fill_locked(req, fill_price, req.volume)
         report = ExecutionReport(
@@ -382,7 +382,9 @@ class PaperBrokerAdapter(ExecutionAdapter):
         else:
             # Opposite direction — reduce / close / reverse
             close_volume = min(volume, existing.volume)
-            realized = self._realized_pnl(existing.side, existing.open_price, fill_price, close_volume)
+            realized = self._realized_pnl(
+                existing.side, existing.open_price, fill_price, close_volume
+            )
             self._account.balance += realized
 
             remaining = volume - close_volume
@@ -421,7 +423,7 @@ class PaperBrokerAdapter(ExecutionAdapter):
 
     def _open_position_locked(self, req: OrderRequest, fill_price: float, volume: float) -> str:
         broker_position_id = self._generate_id("PBP")
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         pos = PositionSnapshot(
             broker_position_id=broker_position_id,
             symbol=req.symbol,
@@ -488,7 +490,7 @@ class PaperBrokerAdapter(ExecutionAdapter):
             return self._cancel_order_locked(broker_order_id)
 
     def _cancel_order_locked(self, broker_order_id: str) -> ExecutionReport:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         req = self._pending.pop(broker_order_id, None)
         if req is not None:
             report = ExecutionReport(
@@ -541,7 +543,7 @@ class PaperBrokerAdapter(ExecutionAdapter):
         *,
         reason: str = "manual",
     ) -> ExecutionReport:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         pos = self._positions.get(broker_position_id)
         if pos is None:
             return ExecutionReport(
@@ -634,7 +636,7 @@ class PaperBrokerAdapter(ExecutionAdapter):
         stop_loss: float | None,
         take_profit: float | None,
     ) -> ExecutionReport:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         pos = self._positions.get(broker_position_id)
         if pos is None:
             return ExecutionReport(
@@ -743,7 +745,7 @@ class PaperBrokerAdapter(ExecutionAdapter):
         )
 
     def _update_ticks_locked(self, symbol: str, bid: float, ask: float) -> Tick:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         tick = Tick(symbol=symbol, bid=bid, ask=ask, ts=now)
         self._tick_cache[symbol] = tick
 
@@ -761,14 +763,14 @@ class PaperBrokerAdapter(ExecutionAdapter):
             should_close = False
             reason = ""
             if pos.stop_loss is not None:
-                if pos.side == "buy" and bid <= pos.stop_loss:
-                    should_close, reason = True, "stop_loss"
-                elif pos.side == "sell" and ask >= pos.stop_loss:
+                if (pos.side == "buy" and bid <= pos.stop_loss) or (
+                    pos.side == "sell" and ask >= pos.stop_loss
+                ):
                     should_close, reason = True, "stop_loss"
             if not should_close and pos.take_profit is not None:
-                if pos.side == "buy" and bid >= pos.take_profit:
-                    should_close, reason = True, "take_profit"
-                elif pos.side == "sell" and ask <= pos.take_profit:
+                if (pos.side == "buy" and bid >= pos.take_profit) or (
+                    pos.side == "sell" and ask <= pos.take_profit
+                ):
                     should_close, reason = True, "take_profit"
 
             if should_close:

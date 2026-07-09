@@ -34,12 +34,12 @@ allow_close_existing : bool
     If True, emit the flatten signal so existing positions are closed
     rather than just suppressing new entries (default True).
 """
+
 from __future__ import annotations
 
 from datetime import datetime, timedelta
-from typing import Any
-
 from platform.strategies.sdk import Bar, Signal, Strategy, StrategyContext, strategy
+from typing import Any
 
 
 def is_in_blackout(now: datetime, event_ts: datetime, before_min: int, after_min: int) -> bool:
@@ -99,7 +99,9 @@ class NewsOverlayStrategy(Strategy):
                 continue
             if self.high_impact_only and impact != "high":
                 continue
-            if is_in_blackout(now, event_ts, self.blackout_minutes_before, self.blackout_minutes_after):
+            if is_in_blackout(
+                now, event_ts, self.blackout_minutes_before, self.blackout_minutes_after
+            ):
                 in_blackout = True
                 triggering_event = event
                 break

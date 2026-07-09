@@ -7,14 +7,10 @@ Vertical slice:
         → write Trade row (realized PnL, duration)
         → publish POSITION_UPDATES event
 """
+
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from uuid import UUID
-
-from pydantic import BaseModel
-from sqlalchemy import select
-
+from datetime import UTC, datetime
 from platform.core.exceptions import NotFoundError, ValidationError
 from platform.core.logging import get_logger
 from platform.db.models import Position, Terminal, Trade
@@ -22,6 +18,10 @@ from platform.db.session import db_context
 from platform.events.bus import get_event_bus
 from platform.events.topics import Topic
 from platform.infrastructure.mt5_bridge.client import get_bridge_client
+from uuid import UUID
+
+from pydantic import BaseModel
+from sqlalchemy import select
 
 _log = get_logger(__name__)
 
@@ -77,12 +77,14 @@ async def handle_close_position(cmd: ClosePositionCommand) -> ClosePositionResul
         )
 
         remote_status = reply.payload.get("status", "closed")
-        close_price = float(reply.payload.get("price") or reply.payload.get("avg_price") or pos.current_price)
+        close_price = float(
+            reply.payload.get("price") or reply.payload.get("avg_price") or pos.current_price
+        )
         closed_volume = float(reply.payload.get("volume") or pos.volume)
         realized_pnl = float(reply.payload.get("pnl") or pos.unrealized_pnl or 0)
 
         trade_id: UUID | None = None
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         if remote_status in ("closed", "filled"):
             pos.status = "closed"
             pos.closed_at = now

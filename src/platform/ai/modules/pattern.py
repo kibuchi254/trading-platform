@@ -5,11 +5,11 @@ patterns (Doji, Hammer, Shooting Star, Bullish/Bearish Engulfing,
 Morning/Evening Star) and emits a directional bias with a confidence
 proportional to the strength of the detected patterns.
 """
+
 from __future__ import annotations
 
-from typing import Any
-
 from platform.ai.orchestrator import AIContext, AIModule, AIPrediction
+from typing import Any
 
 
 def _num(bar: dict[str, Any], key: str) -> float:
@@ -66,9 +66,13 @@ def detect_star(b1: dict[str, Any], b2: dict[str, Any], b3: dict[str, Any]) -> s
 _BULLISH = {"hammer", "bullish_engulfing", "morning_star"}
 _BEARISH = {"shooting_star", "bearish_engulfing", "evening_star"}
 _PATTERN_STRENGTH = {
-    "doji": 0.2, "hammer": 0.5, "shooting_star": 0.5,
-    "bullish_engulfing": 0.7, "bearish_engulfing": 0.7,
-    "morning_star": 0.85, "evening_star": 0.85,
+    "doji": 0.2,
+    "hammer": 0.5,
+    "shooting_star": 0.5,
+    "bullish_engulfing": 0.7,
+    "bearish_engulfing": 0.7,
+    "morning_star": 0.85,
+    "evening_star": 0.85,
 }
 
 
@@ -80,6 +84,7 @@ class PatternAI(AIModule):
     determined by the net bullishness of the patterns found; confidence
     scales with the strongest pattern detected.
     """
+
     name = "pattern"
     version = "1.0.0"
 
@@ -87,8 +92,11 @@ class PatternAI(AIModule):
         bars = ctx.features.get("bars", []) or []
         if len(bars) < 2:
             return AIPrediction(
-                module=self.name, symbol=ctx.symbol, direction="neutral",
-                confidence=0.2, horizon="short",
+                module=self.name,
+                symbol=ctx.symbol,
+                direction="neutral",
+                confidence=0.2,
+                horizon="short",
                 payload={"patterns": [], "note": "insufficient bars"},
             )
         found: list[str] = []
@@ -110,7 +118,10 @@ class PatternAI(AIModule):
         strength = max((_PATTERN_STRENGTH.get(p, 0.0) for p in found), default=0.0)
         confidence = min(1.0, strength + 0.1 * (len(found) - 1))
         return AIPrediction(
-            module=self.name, symbol=ctx.symbol, direction=direction,
-            confidence=confidence, horizon="short",
+            module=self.name,
+            symbol=ctx.symbol,
+            direction=direction,
+            confidence=confidence,
+            horizon="short",
             payload={"patterns": found, "strength": round(strength, 3)},
         )

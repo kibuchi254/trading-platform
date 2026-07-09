@@ -3,11 +3,10 @@
 Two EMAs (fast/slow). On a closed bar, when the fast crosses above the slow,
 emit a BUY signal; when it crosses below, emit SELL.
 """
+
 from __future__ import annotations
 
 from collections import deque
-from typing import Any
-
 from platform.strategies.sdk import Bar, Signal, Strategy, StrategyContext, strategy
 
 
@@ -24,7 +23,9 @@ class EMACrossStrategy(Strategy):
     version = "1.0.0"
     default_config = {"fast_period": 9, "slow_period": 21, "min_strength": 0.6}
 
-    def __init__(self, *, fast_period: int = 9, slow_period: int = 21, min_strength: float = 0.6) -> None:
+    def __init__(
+        self, *, fast_period: int = 9, slow_period: int = 21, min_strength: float = 0.6
+    ) -> None:
         self.fast_period = fast_period
         self.slow_period = slow_period
         self.min_strength = min_strength
@@ -57,7 +58,9 @@ class EMACrossStrategy(Strategy):
             if strength < self.min_strength:
                 return None
             return Signal(
-                symbol=bar.symbol, side="buy", strength=strength,
+                symbol=bar.symbol,
+                side="buy",
+                strength=strength,
                 meta={"fast": self._cur_fast, "slow": self._cur_slow, "tf": bar.timeframe},
             )
         # Bearish cross
@@ -66,7 +69,9 @@ class EMACrossStrategy(Strategy):
             if strength < self.min_strength:
                 return None
             return Signal(
-                symbol=bar.symbol, side="sell", strength=strength,
+                symbol=bar.symbol,
+                side="sell",
+                strength=strength,
                 meta={"fast": self._cur_fast, "slow": self._cur_slow, "tf": bar.timeframe},
             )
         return None

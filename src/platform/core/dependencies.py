@@ -1,16 +1,17 @@
 """Auth dependency — extracts user from JWT or API key."""
+
 from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
+from datetime import UTC
+from platform.core.security import decode_token, verify_api_key
+from platform.db.models import APIKey, User
+from platform.db.session import get_db
 
 from fastapi import Depends, Header, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from platform.core.security import decode_token, verify_api_key
-from platform.db.models import APIKey, User
-from platform.db.session import get_db
 
 
 @dataclass(slots=True)
@@ -40,7 +41,7 @@ async def get_current_user(
 async def _auth_jwt(token: str, db: AsyncSession) -> CurrentUser:
     try:
         claims = decode_token(token)
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         raise HTTPException(status_code=401, detail="Invalid token") from e
     if claims.get("type") != "access":
         raise HTTPException(status_code=401, detail="Wrong token type")
@@ -50,8 +51,11 @@ async def _auth_jwt(token: str, db: AsyncSession) -> CurrentUser:
     if user is None or not user.is_active or user.is_deleted:
         raise HTTPException(status_code=401, detail="User inactive or deleted")
     return CurrentUser(
-        user_id=user_id, org_id=org_id, role=user.role,
-        scopes=list(claims.get("scopes", [])), auth_method="jwt",
+        user_id=user_id,
+        org_id=org_id,
+        role=user.role,
+        scopes=list(claims.get("scopes", [])),
+        auth_method="jwt",
     )
 
 
@@ -65,22 +69,28 @@ async def _auth_api_key(raw: str, db: AsyncSession) -> CurrentUser:
     if api_key is None or not verify_api_key(raw, api_key.key_hash):
         raise HTTPException(status_code=401, detail="Invalid API key")
     if api_key.expires_at is not None:
-        from datetime import datetime, timezone
-        if api_key.expires_at < datetime.now(timezone.utc):
+        from datetime import datetime
+
+        if api_key.expires_at < datetime.now(UTC):
             raise HTTPException(status_code=401, detail="API key expired")
     user = await db.get(User, api_key.user_id)
     if user is None or not user.is_active:
         raise HTTPException(status_code=401, detail="User inactive")
     return CurrentUser(
-        user_id=user.id, org_id=api_key.org_id, role=user.role,
-        scopes=list(api_key.scopes), auth_method="api_key",
+        user_id=user.id,
+        org_id=api_key.org_id,
+        role=user.role,
+        scopes=list(api_key.scopes),
+        auth_method="api_key",
     )
 
 
 def require_role(*roles: str):  # type: ignore[no-untyped-def]
     """FastAPI dependency factory: require any of the given roles."""
+
     async def _dep(user: CurrentUser = Depends(get_current_user)) -> CurrentUser:
         if user.role not in roles and "admin" not in user.scopes:
             raise HTTPException(status_code=403, detail="Insufficient role")
         return user
+
     return _dep

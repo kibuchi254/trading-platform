@@ -6,18 +6,17 @@ forwarded to the bridge. If any rule rejects, the order never leaves the system.
 Rules are independent and registered via `register_rule`. Adding a new rule
 is a one-liner — no core code changes.
 """
+
 from __future__ import annotations
 
 import abc
 from dataclasses import dataclass
-from typing import Awaitable, Callable
-from uuid import UUID
-
 from platform.core.exceptions import RiskLimitBreached
 from platform.core.logging import get_logger
 from platform.core.telemetry import RISK_DECISIONS
 from platform.events.bus import get_event_bus
 from platform.events.topics import Topic
+from uuid import UUID
 
 _log = get_logger(__name__)
 
@@ -101,11 +100,23 @@ class RiskEngine:
         self._rules.append(rule)
         _log.info("risk_rule_registered", rule=rule.name)
 
-    async def check_order(self, *, org_id: UUID, terminal_id: str, symbol: str,
-                          side: str, volume: float, price: float | None = None) -> None:
+    async def check_order(
+        self,
+        *,
+        org_id: UUID,
+        terminal_id: str,
+        symbol: str,
+        side: str,
+        volume: float,
+        price: float | None = None,
+    ) -> None:
         ctx = OrderContext(
-            org_id=org_id, terminal_id=terminal_id, symbol=symbol,
-            side=side, volume=volume, price=price,
+            org_id=org_id,
+            terminal_id=terminal_id,
+            symbol=symbol,
+            side=side,
+            volume=volume,
+            price=price,
         )
         for rule in self._rules:
             try:
@@ -116,8 +127,10 @@ class RiskEngine:
                 await bus.publish(
                     Topic.RISK_EVENTS,
                     {
-                        "org_id": str(org_id), "rule": rule.name,
-                        "severity": "critical", "action": "block",
+                        "org_id": str(org_id),
+                        "rule": rule.name,
+                        "severity": "critical",
+                        "action": "block",
                         "details": {"reason": str(e), "symbol": symbol, "volume": volume},
                     },
                 )

@@ -11,17 +11,17 @@ can override the constructor argument to add custom sectors or remap
 symbols. Symbols not present in any sector list are bucketed into
 ``"other"`` and grouped together.
 """
+
 from __future__ import annotations
 
 from collections import defaultdict
-
-from sqlalchemy import select
-
 from platform.core.exceptions import RiskLimitBreached
 from platform.core.logging import get_logger
 from platform.db.models import Position
 from platform.db.session import db_context
 from platform.risk.engine import OrderContext, RiskRule
+
+from sqlalchemy import select
 
 _log = get_logger(__name__)
 
@@ -59,7 +59,9 @@ class SectorExposureRule(RiskRule):
             assigned to ``"other"``.
         """
         self.max_sector_pct = max_sector_pct
-        self.sectors = sectors if sectors is not None else {k: list(v) for k, v in _DEFAULT_SECTORS.items()}
+        self.sectors = (
+            sectors if sectors is not None else {k: list(v) for k, v in _DEFAULT_SECTORS.items()}
+        )
         # Reverse index: symbol -> sector
         self._symbol_to_sector: dict[str, str] = {}
         for sector, syms in self.sectors.items():
@@ -79,9 +81,7 @@ class SectorExposureRule(RiskRule):
             ``max_sector_pct`` after the new order is added.
         """
         async with db_context() as session:
-            rows_stmt = select(
-                Position.symbol, Position.volume, Position.current_price
-            ).where(
+            rows_stmt = select(Position.symbol, Position.volume, Position.current_price).where(
                 Position.org_id == ctx.org_id,
                 Position.status == "open",
             )

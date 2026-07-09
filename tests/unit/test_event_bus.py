@@ -1,9 +1,10 @@
 """Test the EventBus — local-only mode (no Redis)."""
+
 from __future__ import annotations
 
-import pytest
-
 from platform.events.bus import EventBus
+
+import pytest
 
 
 @pytest.fixture

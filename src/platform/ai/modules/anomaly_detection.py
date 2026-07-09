@@ -6,12 +6,12 @@ volume, or a tick-rate spike, are flagged as anomalies. A bearish bias
 is applied because microstructure anomalies often precede adverse
 moves for the slower side of the book.
 """
+
 from __future__ import annotations
 
 import statistics
-from typing import Any
-
 from platform.ai.orchestrator import AIContext, AIModule, AIPrediction
+from typing import Any
 
 
 def zscore(value: float, mean: float, std: float) -> float:
@@ -58,6 +58,7 @@ class AnomalyDetectionAI(AIModule):
     outliers above 3σ, and detects tick-rate spikes. Direction is bearish
     when anomalies are present, neutral otherwise.
     """
+
     name = "anomaly_detection"
     version = "1.0.0"
 
@@ -65,8 +66,11 @@ class AnomalyDetectionAI(AIModule):
         ticks = ctx.features.get("tick_samples", []) or []
         if len(ticks) < 5:
             return AIPrediction(
-                module=self.name, symbol=ctx.symbol, direction="neutral",
-                confidence=0.1, horizon="short",
+                module=self.name,
+                symbol=ctx.symbol,
+                direction="neutral",
+                confidence=0.1,
+                horizon="short",
                 payload={"anomalies": [], "severity": "low"},
             )
         spreads = [float(t.get("ask", 0)) - float(t.get("bid", 0)) for t in ticks]
@@ -78,29 +82,42 @@ class AnomalyDetectionAI(AIModule):
         vol_std = statistics.pstdev(volumes) or 1e-9
         anomalies: list[dict[str, Any]] = []
         for i in detect_outliers(spreads, 3.0):
-            anomalies.append({
-                "index": i, "type": "spread_spike",
-                "spread_z": round(zscore(spreads[i], spread_mean, spread_std), 2),
-            })
+            anomalies.append(
+                {
+                    "index": i,
+                    "type": "spread_spike",
+                    "spread_z": round(zscore(spreads[i], spread_mean, spread_std), 2),
+                }
+            )
         for i in detect_outliers(volumes, 3.0):
-            anomalies.append({
-                "index": i, "type": "volume_spike",
-                "volume_z": round(zscore(volumes[i], vol_mean, vol_std), 2),
-            })
+            anomalies.append(
+                {
+                    "index": i,
+                    "type": "volume_spike",
+                    "volume_z": round(zscore(volumes[i], vol_mean, vol_std), 2),
+                }
+            )
         tick_rate = _tick_rate(timestamps)
         if tick_rate > 0 and len(timestamps) >= 10:
-            half = timestamps[len(timestamps) // 2:]
+            half = timestamps[len(timestamps) // 2 :]
             recent_rate = _tick_rate(half)
             if recent_rate > 2.0 * tick_rate:
-                anomalies.append({"type": "tick_rate_spike",
-                                  "rate": round(recent_rate, 2),
-                                  "baseline": round(tick_rate, 2)})
+                anomalies.append(
+                    {
+                        "type": "tick_rate_spike",
+                        "rate": round(recent_rate, 2),
+                        "baseline": round(tick_rate, 2),
+                    }
+                )
         severity = _severity(len(anomalies))
         direction = "bearish" if anomalies else "neutral"
         confidence = min(1.0, len(anomalies) / 8.0)
         return AIPrediction(
-            module=self.name, symbol=ctx.symbol, direction=direction,
-            confidence=confidence, horizon="short",
+            module=self.name,
+            symbol=ctx.symbol,
+            direction=direction,
+            confidence=confidence,
+            horizon="short",
             payload={
                 "anomalies": anomalies,
                 "severity": severity,

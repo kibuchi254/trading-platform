@@ -6,16 +6,26 @@ releases (NFP, CPI, FOMC, ECB, …) and computes each event's surprise
 surprise drives direction on USD-paired symbols; output horizon is
 medium because macro surprises persist for hours to days.
 """
+
 from __future__ import annotations
 
+from platform.ai.orchestrator import AIContext, AIModule, AIPrediction
 from typing import Any
 
-from platform.ai.orchestrator import AIContext, AIModule, AIPrediction
-
 _HIGH_IMPACT_EVENTS = {
-    "NFP", "Nonfarm Payrolls", "Non-Farm Payrolls",
-    "CPI", "Core CPI", "FOMC", "ECB", "Fed Rate Decision",
-    "GDP", "PCE", "Core PCE", "ISM", "PMI",
+    "NFP",
+    "Nonfarm Payrolls",
+    "Non-Farm Payrolls",
+    "CPI",
+    "Core CPI",
+    "FOMC",
+    "ECB",
+    "Fed Rate Decision",
+    "GDP",
+    "PCE",
+    "Core PCE",
+    "ISM",
+    "PMI",
 }
 
 
@@ -61,6 +71,7 @@ class EconomicCalendarAI(AIModule):
     event's impact. A positive USD surprise is bullish for USD-paired
     symbols (per spec: better economy → stronger currency).
     """
+
     name = "economic_calendar"
     version = "1.0.0"
 
@@ -68,8 +79,11 @@ class EconomicCalendarAI(AIModule):
         events = ctx.features.get("events", []) or []
         if not events:
             return AIPrediction(
-                module=self.name, symbol=ctx.symbol, direction="neutral",
-                confidence=0.1, horizon="medium",
+                module=self.name,
+                symbol=ctx.symbol,
+                direction="neutral",
+                confidence=0.1,
+                horizon="medium",
                 payload={"event_count": 0, "high_impact": 0},
             )
         is_usd = _symbol_uses_usd(ctx.symbol or "")
@@ -100,16 +114,22 @@ class EconomicCalendarAI(AIModule):
             weight_total += w
         if weight_total == 0:
             return AIPrediction(
-                module=self.name, symbol=ctx.symbol, direction="neutral",
-                confidence=0.2, horizon="medium",
+                module=self.name,
+                symbol=ctx.symbol,
+                direction="neutral",
+                confidence=0.2,
+                horizon="medium",
                 payload={"event_count": len(events), "high_impact": 0},
             )
         net = weighted / weight_total
         direction = "bullish" if net > 0.1 else "bearish" if net < -0.1 else "neutral"
         confidence = min(1.0, abs(net))
         return AIPrediction(
-            module=self.name, symbol=ctx.symbol, direction=direction,
-            confidence=confidence, horizon="medium",
+            module=self.name,
+            symbol=ctx.symbol,
+            direction=direction,
+            confidence=confidence,
+            horizon="medium",
             payload={
                 "event_count": len(events),
                 "high_impact": high_impact_count,

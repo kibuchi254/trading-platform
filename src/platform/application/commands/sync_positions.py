@@ -1,17 +1,17 @@
 """Force terminal position sync — pull all open positions from MT5 and reconcile."""
+
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from uuid import UUID
-
-from pydantic import BaseModel
-from sqlalchemy import select
-
+from datetime import UTC, datetime
 from platform.core.exceptions import NotFoundError
 from platform.core.logging import get_logger
 from platform.db.models import Position, Terminal
 from platform.db.session import db_context
 from platform.infrastructure.mt5_bridge.client import get_bridge_client
+from uuid import UUID
+
+from pydantic import BaseModel
+from sqlalchemy import select
 
 _log = get_logger(__name__)
 
@@ -44,12 +44,16 @@ async def handle_sync_positions(cmd: SyncPositionsCommand) -> SyncPositionsResul
 
         # Get currently-open DB positions
         db_open = (
-            await db.execute(
-                select(Position).where(
-                    Position.terminal_id == terminal.id, Position.status == "open"
+            (
+                await db.execute(
+                    select(Position).where(
+                        Position.terminal_id == terminal.id, Position.status == "open"
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         db_by_broker_id = {p.broker_position_id: p for p in db_open if p.broker_position_id}
 
         remote_broker_ids = set()
@@ -73,7 +77,8 @@ async def handle_sync_positions(cmd: SyncPositionsCommand) -> SyncPositionsResul
                     swap=float(rp.get("swap", 0)),
                     unrealized_pnl=float(rp.get("unrealized_pnl", 0)),
                     opened_at=datetime.fromisoformat(rp["opened_at"].replace("Z", "+00:00"))
-                        if isinstance(rp["opened_at"], str) else datetime.now(timezone.utc),
+                    if isinstance(rp["opened_at"], str)
+                    else datetime.now(UTC),
                 )
                 db.add(p)
             else:
@@ -92,13 +97,17 @@ async def handle_sync_positions(cmd: SyncPositionsCommand) -> SyncPositionsResul
         for broker_id, p in db_by_broker_id.items():
             if broker_id not in remote_broker_ids:
                 p.status = "closed"
-                p.closed_at = datetime.now(timezone.utc)
+                p.closed_at = datetime.now(UTC)
                 closed_count += 1
 
         await db.commit()
         synced = len(remote_positions)
-        _log.info("positions_synced", terminal_id=cmd.terminal_id, synced=synced, closed=closed_count)
+        _log.info(
+            "positions_synced", terminal_id=cmd.terminal_id, synced=synced, closed=closed_count
+        )
 
     return SyncPositionsResult(
-        terminal_id=cmd.terminal_id, synced_count=synced, closed_count=closed_count,
+        terminal_id=cmd.terminal_id,
+        synced_count=synced,
+        closed_count=closed_count,
     )

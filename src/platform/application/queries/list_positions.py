@@ -5,17 +5,16 @@ Vertical slice:
   API → query → DB: select Position rows by org_id (status + terminal_id filters)
         → return DTOs
 """
+
 from __future__ import annotations
 
 from datetime import datetime
+from platform.db.models import Position
+from platform.db.session import db_context
 from uuid import UUID
 
 from pydantic import BaseModel
 from sqlalchemy import select
-
-from platform.db.models import Position
-from platform.db.session import db_context
-
 
 # ── Query + DTO ────────────────────────────────────────────────────────────
 

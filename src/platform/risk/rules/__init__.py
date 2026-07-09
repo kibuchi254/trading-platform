@@ -10,31 +10,31 @@ Adding a new rule:
     2. Re-export it here.
     3. Append it to ``register_all_rules``.
 """
+
 from __future__ import annotations
 
 from platform.risk.engine import RiskEngine, RiskRule
-
-from platform.risk.rules.position_limit import PositionLimitRule
-from platform.risk.rules.max_exposure import MaxExposureRule
 from platform.risk.rules.correlation_risk import CorrelationRiskRule
+from platform.risk.rules.kelly_sizing import KellySizingRule
+from platform.risk.rules.max_exposure import MaxExposureRule
+from platform.risk.rules.news_lock import NewsLockRule
+from platform.risk.rules.position_limit import PositionLimitRule
 from platform.risk.rules.sector_exposure import SectorExposureRule
 from platform.risk.rules.spread_protection import SpreadProtectionRule
-from platform.risk.rules.news_lock import NewsLockRule
 from platform.risk.rules.volatility_lock import VolatilityLockRule
-from platform.risk.rules.kelly_sizing import KellySizingRule
 
 __all__ = [
-    "RiskRule",
-    "PositionLimitRule",
-    "MaxExposureRule",
+    "ALL_RULES",
     "CorrelationRiskRule",
+    "KellySizingRule",
+    "MaxExposureRule",
+    "NewsLockRule",
+    "PositionLimitRule",
+    "RiskRule",
     "SectorExposureRule",
     "SpreadProtectionRule",
-    "NewsLockRule",
     "VolatilityLockRule",
-    "KellySizingRule",
     "register_all_rules",
-    "ALL_RULES",
 ]
 
 

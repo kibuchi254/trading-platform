@@ -10,15 +10,15 @@ The to_domain / from_domain helpers are therefore identity pass-throughs,
 kept for shape-consistency with sibling repositories so that a future
 Account aggregate can be slotted in without touching callers.
 """
+
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from platform.db.models import Account
 from uuid import UUID
 
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from platform.db.models import Account
 
 
 class AccountRepository:
@@ -51,8 +51,12 @@ class AccountRepository:
         return (await self.db.execute(stmt)).scalar_one_or_none()
 
     async def list_by_org(self, org_id: UUID) -> list[Account]:
-        stmt = select(Account).where(Account.org_id == org_id).order_by(
-            Account.created_at.desc(),
+        stmt = (
+            select(Account)
+            .where(Account.org_id == org_id)
+            .order_by(
+                Account.created_at.desc(),
+            )
         )
         return list((await self.db.execute(stmt)).scalars().all())
 
@@ -70,17 +74,26 @@ class AccountRepository:
         return entity
 
     async def update_balance(
-        self, id: UUID, *, equity: float, balance: float,
-        margin: float, free_margin: float,
+        self,
+        id: UUID,
+        *,
+        equity: float,
+        balance: float,
+        margin: float,
+        free_margin: float,
     ) -> bool:
         """Atomically refresh the account snapshot from a bridge sync message."""
-        stmt = update(Account).where(Account.id == id).values(
-            equity=equity,
-            balance=balance,
-            margin=margin,
-            free_margin=free_margin,
-            last_synced_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
+        stmt = (
+            update(Account)
+            .where(Account.id == id)
+            .values(
+                equity=equity,
+                balance=balance,
+                margin=margin,
+                free_margin=free_margin,
+                last_synced_at=datetime.now(UTC),
+                updated_at=datetime.now(UTC),
+            )
         )
         result = await self.db.execute(stmt)
         await self.db.flush()

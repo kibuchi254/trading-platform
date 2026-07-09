@@ -28,26 +28,31 @@ Design conventions
 * **structlog.**  Every log line is structured JSON in production for
   downstream log aggregation.
 """
+
 from __future__ import annotations
 
 import asyncio
 import json
 from contextlib import suppress
-from datetime import datetime, timedelta, timezone
-from typing import Any
-from uuid import UUID
-
-from celery import Task
-from sqlalchemy import func, select, update
-from sqlalchemy.dialects.postgresql import insert as pg_insert
-
+from datetime import UTC, datetime, timedelta
 from platform.core.logging import get_logger
 from platform.core.telemetry import (
-    TASK_DURATION, TASK_RESULTS, TICKS_PERSISTED,
+    TASK_DURATION,
+    TASK_RESULTS,
+    TICKS_PERSISTED,
 )
 from platform.db.models import (
-    Account, Backtest, Execution, Notification, Order, Position,
-    RiskEvent, Signal, Terminal, Trade, Tick,
+    Account,
+    Backtest,
+    Execution,
+    Notification,
+    Order,
+    Position,
+    RiskEvent,
+    Signal,
+    Terminal,
+    Tick,
+    Trade,
 )
 from platform.db.session import db_context, dispose_engine, get_engine
 from platform.events.bus import get_event_bus
@@ -55,23 +60,31 @@ from platform.events.topics import Topic
 from platform.infrastructure.celery_app import app
 from platform.infrastructure.mt5_bridge.client import get_bridge_client
 from platform.notifications.base import (
-    NotificationMessage, get_dispatcher,
+    NotificationMessage,
+    get_dispatcher,
 )
 from platform.risk.engine import get_risk_engine
+from typing import Any
+from uuid import UUID
+
+from celery import Task
+from sqlalchemy import func, select, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 _log = get_logger(__name__)
 
 # ── Tunables ─────────────────────────────────────────────────────────────────
-TICK_BATCH_SIZE: int = 1_000          # rows per bulk INSERT
-ARCHIVE_BATCH_SIZE: int = 10_000      # rows per archive/purge batch
-SIGNAL_TTL_HOURS: int = 1             # signals older than this → EXPIRED
+TICK_BATCH_SIZE: int = 1_000  # rows per bulk INSERT
+ARCHIVE_BATCH_SIZE: int = 10_000  # rows per archive/purge batch
+SIGNAL_TTL_HOURS: int = 1  # signals older than this → EXPIRED
 DEFAULT_RISK_LIMIT_USD: float = 1_000.0
 DEFAULT_MAX_DRAWDOWN_PCT: float = 0.20
-PERF_CACHE_TTL_SECONDS: int = 3_600   # 1h — hourly recompute, cached for dashboard
+PERF_CACHE_TTL_SECONDS: int = 3_600  # 1h — hourly recompute, cached for dashboard
 NOTIFICATION_MAX_RETRIES: int = 3
 
 
 # ── Helpers ─────────────────────────────────────────────────────────────────
+
 
 def _run(coro: Any) -> Any:
     """Run an async coroutine from a sync Celery task.
@@ -107,10 +120,10 @@ def _parse_dt(value: Any) -> datetime | None:
     if value is None:
         return None
     if isinstance(value, datetime):
-        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+        return value if value.tzinfo else value.replace(tzinfo=UTC)
     try:
         dt = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-        return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+        return dt if dt.tzinfo else dt.replace(tzinfo=UTC)
     except (ValueError, TypeError):
         return None
 
@@ -118,11 +131,13 @@ def _parse_dt(value: Any) -> datetime | None:
 def _record_result(task_name: str, ok: bool) -> None:
     """Increment the task-result counter."""
     TASK_RESULTS.labels(
-        task=task_name, result="success" if ok else "failure",
+        task=task_name,
+        result="success" if ok else "failure",
     ).inc()
 
 
 # ── 1. persist_tick ─────────────────────────────────────────────────────────
+
 
 @app.task(name="platform.tasks.persist_tick", bind=True, queue="ticks")
 def persist_tick(self: Task, tick: dict[str, Any]) -> dict[str, Any]:
@@ -142,7 +157,7 @@ def persist_tick(self: Task, tick: dict[str, Any]) -> dict[str, Any]:
     dev tools.
     """
     task_name = self.name
-    started = datetime.now(timezone.utc)
+    started = datetime.now(UTC)
     try:
         # Normalise to a list.
         ticks: list[dict[str, Any]]
@@ -162,9 +177,7 @@ def persist_tick(self: Task, tick: dict[str, Any]) -> dict[str, Any]:
         _record_result(task_name, ok=False)
         raise
     finally:
-        TASK_DURATION.labels(task=task_name).observe(
-            (datetime.now(timezone.utc) - started).total_seconds()
-        )
+        TASK_DURATION.labels(task=task_name).observe((datetime.now(UTC) - started).total_seconds())
 
 
 async def _persist_ticks_async(ticks: list[dict[str, Any]]) -> int:
@@ -185,9 +198,7 @@ async def _persist_ticks_async(ticks: list[dict[str, Any]]) -> int:
     for i in range(0, len(rows), TICK_BATCH_SIZE):
         chunk = rows[i : i + TICK_BATCH_SIZE]
         stmt = (
-            pg_insert(Tick.__table__)
-            .values(chunk)
-            .on_conflict_do_nothing()  # type: ignore[attr-defined]
+            pg_insert(Tick.__table__).values(chunk).on_conflict_do_nothing()  # type: ignore[attr-defined]
         )
         async with engine.begin() as conn:
             result = await conn.execute(stmt)
@@ -224,6 +235,7 @@ def _coerce_tick_row(payload: dict[str, Any]) -> dict[str, Any] | None:
 
 
 # ── 2. persist_execution ────────────────────────────────────────────────────
+
 
 @app.task(name="platform.tasks.persist_execution", bind=True, queue="trades")
 def persist_execution(self: Task, report: dict[str, Any]) -> dict[str, Any]:
@@ -266,7 +278,7 @@ async def _persist_execution_async(report: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("execution report missing client_order_id")
 
     status = str(report.get("status", "")).lower()
-    executed_at = _parse_dt(report.get("executed_at")) or datetime.now(timezone.utc)
+    executed_at = _parse_dt(report.get("executed_at")) or datetime.now(UTC)
     filled_volume = float(report.get("filled_volume") or 0)
     avg_price = report.get("avg_price")
     avg_price_f = float(avg_price) if avg_price is not None else None
@@ -308,14 +320,14 @@ async def _persist_execution_async(report: dict[str, Any]) -> dict[str, Any]:
             new_total = prev_vol + filled_volume
             if avg_price_f is not None and new_total > 0:
                 order.avg_fill_price = (
-                    (prev_avg * prev_vol + avg_price_f * filled_volume) / new_total
-                )
+                    prev_avg * prev_vol + avg_price_f * filled_volume
+                ) / new_total
             order.filled_volume = new_total
         if new_order_status == "filled":
             order.filled_at = executed_at
         if rejection_reason:
             order.rejection_reason = rejection_reason
-        order.updated_at = datetime.now(timezone.utc)
+        order.updated_at = datetime.now(UTC)
 
         # ── 2. Create Execution row (idempotent on broker_execution_id) ─
         execution_id: UUID | None = None
@@ -363,7 +375,7 @@ async def _persist_execution_async(report: dict[str, Any]) -> dict[str, Any]:
                 "rejection_reason": rejection_reason,
             },
         )
-    except Exception:  # noqa: BLE001 — bus publish is best-effort
+    except Exception:
         _log.warning("persist_execution_publish_failed", client_order_id=client_order_id)
 
     _log.info(
@@ -381,6 +393,7 @@ async def _persist_execution_async(report: dict[str, Any]) -> dict[str, Any]:
 
 
 # ── 3. persist_position_update ──────────────────────────────────────────────
+
 
 @app.task(name="platform.tasks.persist_position_update", bind=True, queue="trades")
 def persist_position_update(self: Task, payload: dict[str, Any]) -> dict[str, Any]:
@@ -431,7 +444,7 @@ async def _persist_position_update_async(payload: dict[str, Any]) -> dict[str, A
             Position.broker_position_id == str(broker_position_id),
         )
         position = (await db.execute(pos_stmt)).scalar_one_or_none()
-        opened_at = _parse_dt(payload.get("opened_at")) or datetime.now(timezone.utc)
+        opened_at = _parse_dt(payload.get("opened_at")) or datetime.now(UTC)
 
         if position is None:
             # New position — insert.
@@ -450,7 +463,7 @@ async def _persist_position_update_async(payload: dict[str, Any]) -> dict[str, A
                 unrealized_pnl=float(payload.get("unrealized_pnl") or 0),
                 opened_at=opened_at,
                 status="closed" if is_closed else "open",
-                closed_at=datetime.now(timezone.utc) if is_closed else None,
+                closed_at=datetime.now(UTC) if is_closed else None,
             )
             db.add(position)
             await db.flush()
@@ -463,10 +476,12 @@ async def _persist_position_update_async(payload: dict[str, Any]) -> dict[str, A
             if payload.get("take_profit"):
                 position.take_profit = float(payload["take_profit"])
             position.swap = float(payload.get("swap") or position.swap)
-            position.unrealized_pnl = float(payload.get("unrealized_pnl") or position.unrealized_pnl)
+            position.unrealized_pnl = float(
+                payload.get("unrealized_pnl") or position.unrealized_pnl
+            )
             if is_closed and position.status != "closed":
                 position.status = "closed"
-                position.closed_at = datetime.now(timezone.utc)
+                position.closed_at = datetime.now(UTC)
 
         # On close: book Trade + credit Account balance (idempotent).
         trade_id: UUID | None = None
@@ -478,9 +493,11 @@ async def _persist_position_update_async(payload: dict[str, Any]) -> dict[str, A
                 realized = float(payload.get("realized_pnl") or position.realized_pnl or 0)
                 position.realized_pnl = realized
                 close_price = float(payload.get("current_price") or position.current_price)
-                duration = int(
-                    (position.closed_at - position.opened_at).total_seconds()
-                ) if position.closed_at else 0
+                duration = (
+                    int((position.closed_at - position.opened_at).total_seconds())
+                    if position.closed_at
+                    else 0
+                )
                 # Pips = price delta * 10^digits. Default digits=5 for FX.
                 direction = 1 if position.side == "buy" else -1
                 pips = direction * (close_price - position.open_price) * 10_000
@@ -499,7 +516,7 @@ async def _persist_position_update_async(payload: dict[str, Any]) -> dict[str, A
                     swap=position.swap,
                     duration_seconds=duration,
                     opened_at=position.opened_at,
-                    closed_at=position.closed_at or datetime.now(timezone.utc),
+                    closed_at=position.closed_at or datetime.now(UTC),
                 )
                 db.add(trade)
                 await db.flush()
@@ -511,7 +528,7 @@ async def _persist_position_update_async(payload: dict[str, Any]) -> dict[str, A
                 if account is not None:
                     account.balance = float(account.balance) + realized
                     account.equity = float(account.equity) + realized
-                    account.updated_at = datetime.now(timezone.utc)
+                    account.updated_at = datetime.now(UTC)
 
         await db.commit()
 
@@ -531,6 +548,7 @@ async def _persist_position_update_async(payload: dict[str, Any]) -> dict[str, A
 
 
 # ── 4. persist_account_update ───────────────────────────────────────────────
+
 
 @app.task(name="platform.tasks.persist_account_update", bind=True, queue="trades")
 def persist_account_update(self: Task, payload: dict[str, Any]) -> dict[str, Any]:
@@ -582,14 +600,15 @@ async def _persist_account_update_async(payload: dict[str, Any]) -> dict[str, An
             account.currency = str(payload["currency"])
         if "leverage" in payload:
             account.leverage = int(payload["leverage"])
-        account.last_synced_at = datetime.now(timezone.utc)
-        account.updated_at = datetime.now(timezone.utc)
+        account.last_synced_at = datetime.now(UTC)
+        account.updated_at = datetime.now(UTC)
         await db.commit()
 
     return {"ok": True, "account_id": str(account.id)}
 
 
 # ── 5. run_backtest ─────────────────────────────────────────────────────────
+
 
 @app.task(name="platform.tasks.run_backtest", bind=True, queue="backtest")
 def run_backtest(self: Task, backtest_id: str) -> dict[str, Any]:
@@ -632,7 +651,7 @@ async def _set_backtest_status(bt_id: UUID, status: str) -> None:
         stmt = (
             update(Backtest)
             .where(Backtest.id == bt_id)
-            .values(status=status, updated_at=datetime.now(timezone.utc))
+            .values(status=status, updated_at=datetime.now(UTC))
         )
         await db.execute(stmt)
         await db.commit()
@@ -646,7 +665,7 @@ async def _fail_backtest(bt_id: UUID, error: str) -> None:
             .values(
                 status="failed",
                 results={"error": error[:1000]},
-                updated_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(UTC),
             )
         )
         await db.execute(stmt)
@@ -676,7 +695,7 @@ async def _run_backtest_async(bt_id: UUID) -> dict[str, Any]:
                 sharpe=result.sharpe,
                 trades_count=result.trades_count,
                 results=result.to_dict(),
-                updated_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(UTC),
             )
         )
         await db.execute(stmt)
@@ -699,6 +718,7 @@ async def _run_backtest_async(bt_id: UUID) -> dict[str, Any]:
 
 
 # ── 6. send_notification ───────────────────────────────────────────────────
+
 
 @app.task(
     name="platform.tasks.send_notification",
@@ -797,9 +817,9 @@ async def _send_notification_async(n_id: UUID) -> dict[str, Any]:
             .where(Notification.id == n_id)
             .values(
                 status="sent" if ok else "failed",
-                sent_at=datetime.now(timezone.utc) if ok else None,
+                sent_at=datetime.now(UTC) if ok else None,
                 error=None if ok else "dispatch_failed",
-                updated_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(UTC),
             )
         )
         await db.execute(stmt)
@@ -816,7 +836,7 @@ async def _fail_notification(n_id: UUID, error: str) -> None:
             .values(
                 status="failed",
                 error=error[:500],
-                updated_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(UTC),
             )
         )
         await db.execute(stmt)
@@ -824,6 +844,7 @@ async def _fail_notification(n_id: UUID, error: str) -> None:
 
 
 # ── 7. sync_terminal_positions ──────────────────────────────────────────────
+
 
 @app.task(name="platform.tasks.sync_terminal_positions", bind=True, queue="default")
 def sync_terminal_positions(self: Task, terminal_id: str) -> dict[str, Any]:
@@ -856,7 +877,8 @@ async def _sync_terminal_positions_async(terminal_id: str) -> dict[str, Any]:
             return {"ok": False, "reason": "terminal_not_found"}
 
         db_open_stmt = select(Position).where(
-            Position.terminal_id == terminal.id, Position.status == "open",
+            Position.terminal_id == terminal.id,
+            Position.status == "open",
         )
         db_open = (await db.execute(db_open_stmt)).scalars().all()
         db_by_broker = {p.broker_position_id: p for p in db_open if p.broker_position_id}
@@ -870,7 +892,7 @@ async def _sync_terminal_positions_async(terminal_id: str) -> dict[str, Any]:
             broker_id = str(rp.get("broker_position_id"))
             remote_ids.add(broker_id)
             existing = db_by_broker.get(broker_id)
-            opened_at = _parse_dt(rp.get("opened_at")) or datetime.now(timezone.utc)
+            opened_at = _parse_dt(rp.get("opened_at")) or datetime.now(UTC)
 
             if existing is None:
                 # New position.
@@ -896,16 +918,18 @@ async def _sync_terminal_positions_async(terminal_id: str) -> dict[str, Any]:
                 # Drift detection.
                 drifts: list[str] = []
                 if abs(float(existing.volume) - float(rp["volume"])) > 1e-6:
-                    drifts.append(
-                        f"volume: db={existing.volume} remote={rp['volume']}"
-                    )
-                if rp.get("stop_loss") and existing.stop_loss and \
-                        abs(float(existing.stop_loss) - float(rp["stop_loss"])) > 1e-5:
-                    drifts.append(
-                        f"stop_loss: db={existing.stop_loss} remote={rp['stop_loss']}"
-                    )
-                if rp.get("take_profit") and existing.take_profit and \
-                        abs(float(existing.take_profit) - float(rp["take_profit"])) > 1e-5:
+                    drifts.append(f"volume: db={existing.volume} remote={rp['volume']}")
+                if (
+                    rp.get("stop_loss")
+                    and existing.stop_loss
+                    and abs(float(existing.stop_loss) - float(rp["stop_loss"])) > 1e-5
+                ):
+                    drifts.append(f"stop_loss: db={existing.stop_loss} remote={rp['stop_loss']}")
+                if (
+                    rp.get("take_profit")
+                    and existing.take_profit
+                    and abs(float(existing.take_profit) - float(rp["take_profit"])) > 1e-5
+                ):
                     drifts.append(
                         f"take_profit: db={existing.take_profit} remote={rp['take_profit']}"
                     )
@@ -925,10 +949,8 @@ async def _sync_terminal_positions_async(terminal_id: str) -> dict[str, Any]:
                 if rp.get("take_profit"):
                     existing.take_profit = float(rp["take_profit"])
                 existing.swap = float(rp.get("swap") or existing.swap)
-                existing.unrealized_pnl = float(
-                    rp.get("unrealized_pnl") or existing.unrealized_pnl
-                )
-                existing.updated_at = datetime.now(timezone.utc)
+                existing.unrealized_pnl = float(rp.get("unrealized_pnl") or existing.unrealized_pnl)
+                existing.updated_at = datetime.now(UTC)
                 updated_count += 1
 
         # Mark DB positions not reported by remote as closed.
@@ -936,8 +958,8 @@ async def _sync_terminal_positions_async(terminal_id: str) -> dict[str, Any]:
         for broker_id, p in db_by_broker.items():
             if broker_id not in remote_ids:
                 p.status = "closed"
-                p.closed_at = datetime.now(timezone.utc)
-                p.updated_at = datetime.now(timezone.utc)
+                p.closed_at = datetime.now(UTC)
+                p.updated_at = datetime.now(UTC)
                 closed_count += 1
                 _log.warning(
                     "sync_positions_db_only_closed",
@@ -968,6 +990,7 @@ async def _sync_terminal_positions_async(terminal_id: str) -> dict[str, Any]:
 
 
 # ── 8. sync_terminal_account ────────────────────────────────────────────────
+
 
 @app.task(name="platform.tasks.sync_terminal_account", bind=True, queue="default")
 def sync_terminal_account(self: Task, terminal_id: str) -> dict[str, Any]:
@@ -1015,8 +1038,8 @@ async def _sync_terminal_account_async(terminal_id: str) -> dict[str, Any]:
             account.currency = str(payload["currency"])
         if "leverage" in payload:
             account.leverage = int(payload["leverage"])
-        account.last_synced_at = datetime.now(timezone.utc)
-        account.updated_at = datetime.now(timezone.utc)
+        account.last_synced_at = datetime.now(UTC)
+        account.updated_at = datetime.now(UTC)
         await db.commit()
 
     return {
@@ -1028,6 +1051,7 @@ async def _sync_terminal_account_async(terminal_id: str) -> dict[str, Any]:
 
 
 # ── 9. cleanup_expired_signals ──────────────────────────────────────────────
+
 
 @app.task(name="platform.tasks.cleanup_expired_signals", bind=True, queue="default")
 def cleanup_expired_signals(self: Task) -> dict[str, Any]:
@@ -1049,7 +1073,7 @@ def cleanup_expired_signals(self: Task) -> dict[str, Any]:
 
 
 async def _cleanup_expired_signals_async() -> dict[str, Any]:
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=SIGNAL_TTL_HOURS)
+    cutoff = datetime.now(UTC) - timedelta(hours=SIGNAL_TTL_HOURS)
     async with db_context() as db:
         # Only expire signals still pending — never touch executed/rejected.
         stmt = (
@@ -1060,7 +1084,7 @@ async def _cleanup_expired_signals_async() -> dict[str, Any]:
             )
             .values(
                 status="expired",
-                updated_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(UTC),
             )
             .returning(Signal.id)
         )
@@ -1073,6 +1097,7 @@ async def _cleanup_expired_signals_async() -> dict[str, Any]:
 
 
 # ── 10. archive_old_ticks ───────────────────────────────────────────────────
+
 
 @app.task(name="platform.tasks.archive_old_ticks", bind=True, queue="default")
 def archive_old_ticks(self: Task, days: int = 90) -> dict[str, Any]:
@@ -1098,10 +1123,11 @@ def archive_old_ticks(self: Task, days: int = 90) -> dict[str, Any]:
 
 async def _archive_old_ticks_async(days: int) -> dict[str, Any]:
     import os
+
     from sqlalchemy import text as sql_text
 
     mode = os.environ.get("ATLAS_TICK_ARCHIVE_MODE", "delete").lower()
-    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    cutoff = datetime.now(UTC) - timedelta(days=days)
     engine = get_engine()
     total_archived = 0
     total_deleted = 0
@@ -1146,8 +1172,10 @@ async def _archive_old_ticks_async(days: int) -> dict[str, Any]:
 
         _log.debug(
             "archive_old_ticks_batch",
-            batch=len(ids), mode=mode,
-            total_deleted=total_deleted, total_archived=total_archived,
+            batch=len(ids),
+            mode=mode,
+            total_deleted=total_deleted,
+            total_archived=total_archived,
         )
         # Safety cap — avoid an unbounded single task run.
         if total_deleted > 5_000_000:
@@ -1156,8 +1184,10 @@ async def _archive_old_ticks_async(days: int) -> dict[str, Any]:
 
     _log.info(
         "archive_old_ticks_done",
-        days=days, mode=mode,
-        deleted=total_deleted, archived=total_archived,
+        days=days,
+        mode=mode,
+        deleted=total_deleted,
+        archived=total_archived,
         cutoff=cutoff.isoformat(),
     )
     return {
@@ -1177,6 +1207,7 @@ def _archive_table_ddl() -> Any:
     archival.
     """
     from sqlalchemy import text
+
     return text("""
         CREATE TABLE IF NOT EXISTS ticks_archive (
             id INTEGER NOT NULL,
@@ -1193,6 +1224,7 @@ def _archive_table_ddl() -> Any:
 
 
 # ── 11. compute_performance_metrics ─────────────────────────────────────────
+
 
 @app.task(name="platform.tasks.compute_performance_metrics", bind=True, queue="default")
 def compute_performance_metrics(self: Task, org_id: str) -> dict[str, Any]:
@@ -1221,25 +1253,22 @@ def compute_performance_metrics(self: Task, org_id: str) -> dict[str, Any]:
 
 async def _compute_performance_metrics_async(org_id: UUID) -> dict[str, Any]:
     import math
-
     from platform.core.config import get_settings
+
     import redis.asyncio as aioredis
 
-    since = datetime.now(timezone.utc) - timedelta(days=30)
+    since = datetime.now(UTC) - timedelta(days=30)
     async with db_context() as db:
         # Aggregate closed trades.
-        stmt = (
-            select(
-                func.count(Trade.id).label("total_trades"),
-                func.sum(Trade.pnl).label("total_pnl"),
-                func.avg(Trade.pnl).label("avg_pnl"),
-                func.max(Trade.pnl).label("best"),
-                func.min(Trade.pnl).label("worst"),
-                func.sum(func.case((Trade.pnl > 0, 1), else_=0)).label("wins"),
-                func.avg(Trade.duration_seconds).label("avg_duration"),
-            )
-            .where(Trade.org_id == org_id, Trade.closed_at >= since)
-        )
+        stmt = select(
+            func.count(Trade.id).label("total_trades"),
+            func.sum(Trade.pnl).label("total_pnl"),
+            func.avg(Trade.pnl).label("avg_pnl"),
+            func.max(Trade.pnl).label("best"),
+            func.min(Trade.pnl).label("worst"),
+            func.sum(func.case((Trade.pnl > 0, 1), else_=0)).label("wins"),
+            func.avg(Trade.duration_seconds).label("avg_duration"),
+        ).where(Trade.org_id == org_id, Trade.closed_at >= since)
         row = (await db.execute(stmt)).one()
 
         # Daily P&L series for drawdown / Sharpe.
@@ -1278,14 +1307,14 @@ async def _compute_performance_metrics_async(org_id: UUID) -> dict[str, Any]:
         max_dd = max(max_dd, dd)
     mean_pnl = (sum(daily_pnls) / len(daily_pnls)) if daily_pnls else 0.0
     variance = (
-        sum((p - mean_pnl) ** 2 for p in daily_pnls) / len(daily_pnls)
-    ) if daily_pnls else 0.0
+        (sum((p - mean_pnl) ** 2 for p in daily_pnls) / len(daily_pnls)) if daily_pnls else 0.0
+    )
     std_pnl = math.sqrt(variance)
     sharpe = (mean_pnl / std_pnl) if std_pnl > 1e-9 else 0.0
 
     metrics = {
         "org_id": str(org_id),
-        "computed_at": datetime.now(timezone.utc).isoformat(),
+        "computed_at": datetime.now(UTC).isoformat(),
         "window_days": 30,
         "total_trades": total_trades,
         "win_rate": round(win_rate, 4),
@@ -1314,7 +1343,7 @@ async def _compute_performance_metrics_async(org_id: UUID) -> dict[str, Any]:
             )
         finally:
             await client.close()
-    except Exception:  # noqa: BLE001 — cache write is best-effort
+    except Exception:
         _log.warning("compute_performance_metrics_cache_failed", org_id=str(org_id))
 
     _log.info(
@@ -1329,6 +1358,7 @@ async def _compute_performance_metrics_async(org_id: UUID) -> dict[str, Any]:
 
 
 # ── 12. check_risk_thresholds ───────────────────────────────────────────────
+
 
 @app.task(name="platform.tasks.check_risk_thresholds", bind=True, queue="default")
 def check_risk_thresholds(self: Task, org_id: str) -> dict[str, Any]:
@@ -1359,15 +1389,17 @@ def check_risk_thresholds(self: Task, org_id: str) -> dict[str, Any]:
 
 
 async def _check_risk_thresholds_async(org_id: UUID) -> dict[str, Any]:
-    today_start = datetime.now(timezone.utc).replace(
-        hour=0, minute=0, second=0, microsecond=0,
+    today_start = datetime.now(UTC).replace(
+        hour=0,
+        minute=0,
+        second=0,
+        microsecond=0,
     )
 
     async with db_context() as db:
         # Today's realized PnL.
-        pnl_stmt = (
-            select(func.sum(Trade.pnl))
-            .where(Trade.org_id == org_id, Trade.closed_at >= today_start)
+        pnl_stmt = select(func.sum(Trade.pnl)).where(
+            Trade.org_id == org_id, Trade.closed_at >= today_start
         )
         daily_pnl = float((await db.execute(pnl_stmt)).scalar_one() or 0)
 
@@ -1383,12 +1415,14 @@ async def _check_risk_thresholds_async(org_id: UUID) -> dict[str, Any]:
 
         # Rule 1: max_daily_loss
         if daily_pnl <= -DEFAULT_RISK_LIMIT_USD:
-            breached_rules.append({
-                "rule": "max_daily_loss",
-                "severity": "critical",
-                "value": daily_pnl,
-                "limit": -DEFAULT_RISK_LIMIT_USD,
-            })
+            breached_rules.append(
+                {
+                    "rule": "max_daily_loss",
+                    "severity": "critical",
+                    "value": daily_pnl,
+                    "limit": -DEFAULT_RISK_LIMIT_USD,
+                }
+            )
 
         # Rule 2: max_drawdown (per account, simple floating-loss proxy)
         for acct in accounts:
@@ -1397,13 +1431,15 @@ async def _check_risk_thresholds_async(org_id: UUID) -> dict[str, Any]:
             if balance > 0 and equity < balance:
                 dd = (balance - equity) / balance
                 if dd >= DEFAULT_MAX_DRAWDOWN_PCT:
-                    breached_rules.append({
-                        "rule": "max_drawdown",
-                        "severity": "critical",
-                        "terminal_id": str(acct.terminal_id),
-                        "value": round(dd, 4),
-                        "limit": DEFAULT_MAX_DRAWDOWN_PCT,
-                    })
+                    breached_rules.append(
+                        {
+                            "rule": "max_drawdown",
+                            "severity": "critical",
+                            "terminal_id": str(acct.terminal_id),
+                            "value": round(dd, 4),
+                            "limit": DEFAULT_MAX_DRAWDOWN_PCT,
+                        }
+                    )
 
         # Persist RiskEvent rows for each breach.
         for breach in breached_rules:
@@ -1446,7 +1482,7 @@ async def _check_risk_thresholds_async(org_id: UUID) -> dict[str, Any]:
                         },
                     },
                 )
-            except Exception:  # noqa: BLE001
+            except Exception:
                 _log.warning("check_risk_thresholds_publish_failed", org_id=str(org_id))
 
             # Send CRITICAL notification.
@@ -1462,10 +1498,7 @@ async def _check_risk_thresholds_async(org_id: UUID) -> dict[str, Any]:
                     body += f"  - {b['rule']}: value={b.get('value')} limit={b.get('limit')}\n"
                 # Prefer email for risk alerts; fall back to any configured channel.
                 channels = dispatcher.channels
-                channel_name = (
-                    "email" if "email" in channels
-                    else next(iter(channels), "email")
-                )
+                channel_name = "email" if "email" in channels else next(iter(channels), "email")
                 msg = NotificationMessage(
                     channel=channel_name,
                     to="",
@@ -1476,7 +1509,7 @@ async def _check_risk_thresholds_async(org_id: UUID) -> dict[str, Any]:
                 )
                 await dispatcher.dispatch(msg)
                 notification_sent = True
-            except Exception:  # noqa: BLE001
+            except Exception:
                 _log.warning("check_risk_thresholds_notify_failed", org_id=str(org_id))
 
     _log.info(
@@ -1498,6 +1531,7 @@ async def _check_risk_thresholds_async(org_id: UUID) -> dict[str, Any]:
 
 
 # ── 13. reconcile_orders ────────────────────────────────────────────────────
+
 
 @app.task(name="platform.tasks.reconcile_orders", bind=True, queue="default")
 def reconcile_orders(self: Task, terminal_id: str) -> dict[str, Any]:
@@ -1538,7 +1572,7 @@ async def _reconcile_orders_async(terminal_id: str) -> dict[str, Any]:
         await rec.session.send(cmd)
         reply = await get_command_queue().enqueue(cmd, timeout=30.0)
         remote_orders = reply.payload.get("orders", []) or []
-    except Exception:  # noqa: BLE001
+    except Exception:
         _log.warning(
             "reconcile_orders_sync_orders_unavailable",
             terminal_id=terminal_id,
@@ -1556,9 +1590,7 @@ async def _reconcile_orders_async(terminal_id: str) -> dict[str, Any]:
             Order.status.in_(["pending", "submitted", "partial"]),
         )
         db_orders = (await db.execute(db_orders_stmt)).scalars().all()
-        db_by_broker = {
-            o.broker_order_id: o for o in db_orders if o.broker_order_id
-        }
+        db_by_broker = {o.broker_order_id: o for o in db_orders if o.broker_order_id}
 
         missing_in_db: list[dict[str, Any]] = []
         missing_in_terminal: list[str] = []
@@ -1570,31 +1602,37 @@ async def _reconcile_orders_async(terminal_id: str) -> dict[str, Any]:
             remote_ids.add(broker_id)
             db_order = db_by_broker.get(broker_id)
             if db_order is None:
-                missing_in_db.append({
-                    "broker_order_id": broker_id,
-                    "status": ro.get("status"),
-                    "symbol": ro.get("symbol"),
-                    "side": ro.get("side"),
-                    "volume": ro.get("volume"),
-                })
+                missing_in_db.append(
+                    {
+                        "broker_order_id": broker_id,
+                        "status": ro.get("status"),
+                        "symbol": ro.get("symbol"),
+                        "side": ro.get("side"),
+                        "volume": ro.get("volume"),
+                    }
+                )
             else:
                 # Compare status / filled_volume.
                 remote_status = str(ro.get("status", "")).lower()
                 if remote_status and remote_status != db_order.status:
-                    mismatches.append({
-                        "broker_order_id": broker_id,
-                        "client_order_id": db_order.client_order_id,
-                        "db_status": db_order.status,
-                        "remote_status": remote_status,
-                    })
+                    mismatches.append(
+                        {
+                            "broker_order_id": broker_id,
+                            "client_order_id": db_order.client_order_id,
+                            "db_status": db_order.status,
+                            "remote_status": remote_status,
+                        }
+                    )
                 remote_filled = float(ro.get("filled_volume") or 0)
                 if abs(float(db_order.filled_volume or 0) - remote_filled) > 1e-6:
-                    mismatches.append({
-                        "broker_order_id": broker_id,
-                        "client_order_id": db_order.client_order_id,
-                        "db_filled_volume": float(db_order.filled_volume or 0),
-                        "remote_filled_volume": remote_filled,
-                    })
+                    mismatches.append(
+                        {
+                            "broker_order_id": broker_id,
+                            "client_order_id": db_order.client_order_id,
+                            "db_filled_volume": float(db_order.filled_volume or 0),
+                            "remote_filled_volume": remote_filled,
+                        }
+                    )
 
         # DB orders not reported by terminal.
         for broker_id, o in db_by_broker.items():
@@ -1603,9 +1641,7 @@ async def _reconcile_orders_async(terminal_id: str) -> dict[str, Any]:
 
         await db.commit()
 
-    total_issues = (
-        len(missing_in_db) + len(missing_in_terminal) + len(mismatches)
-    )
+    total_issues = len(missing_in_db) + len(missing_in_terminal) + len(mismatches)
 
     # Send an alert notification if there are mismatches.
     if total_issues > 0:
@@ -1631,10 +1667,7 @@ async def _reconcile_orders_async(terminal_id: str) -> dict[str, Any]:
                 body += f"  - {m}\n"
             # Prefer email for ops alerts; fall back to any configured channel.
             channels = dispatcher.channels
-            channel_name = (
-                "email" if "email" in channels
-                else next(iter(channels), "email")
-            )
+            channel_name = "email" if "email" in channels else next(iter(channels), "email")
             msg = NotificationMessage(
                 channel=channel_name,
                 to="",
@@ -1644,7 +1677,7 @@ async def _reconcile_orders_async(terminal_id: str) -> dict[str, Any]:
                 priority="HIGH",
             )
             await dispatcher.dispatch(msg)
-        except Exception:  # noqa: BLE001
+        except Exception:
             _log.warning("reconcile_orders_alert_failed", terminal_id=terminal_id)
 
     return {
@@ -1660,6 +1693,7 @@ async def _reconcile_orders_async(terminal_id: str) -> dict[str, Any]:
 
 
 # ── 14. flush_tick_buffer ───────────────────────────────────────────────────
+
 
 @app.task(name="platform.tasks.flush_tick_buffer", bind=True, queue="ticks")
 def flush_tick_buffer(self: Task) -> dict[str, Any]:
@@ -1686,7 +1720,7 @@ async def _flush_tick_buffer_async() -> dict[str, Any]:
     # without a live event bus (e.g. CLI scripts running this task).
     try:
         from platform.market_data.tick_store import get_tick_store
-    except Exception:  # noqa: BLE001
+    except Exception:
         _log.warning("flush_tick_buffer_tick_store_unavailable")
         return {"ok": False, "reason": "tick_store_unavailable"}
 
@@ -1696,7 +1730,7 @@ async def _flush_tick_buffer_async() -> dict[str, Any]:
         return {"ok": True, "flushed": 0, "reason": "not_started"}
     try:
         written = await store.flush_now()
-    except Exception:  # noqa: BLE001
+    except Exception:
         _log.exception("flush_tick_buffer_flush_failed")
         return {"ok": False, "reason": "flush_error"}
     if written > 0:
@@ -1706,6 +1740,7 @@ async def _flush_tick_buffer_async() -> dict[str, Any]:
 
 
 # ── 15. send_daily_report ───────────────────────────────────────────────────
+
 
 @app.task(name="platform.tasks.send_daily_report", bind=True, queue="notifications")
 def send_daily_report(self: Task, user_id: str) -> dict[str, Any]:
@@ -1733,14 +1768,14 @@ def send_daily_report(self: Task, user_id: str) -> dict[str, Any]:
 
 
 async def _send_daily_report_async(user_id: UUID) -> dict[str, Any]:
-    import math
 
     from platform.core.config import get_settings
     from platform.db.models import User
+
     import redis.asyncio as aioredis
 
     # Idempotency check — one report per user per UTC day.
-    today_key = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    today_key = datetime.now(UTC).strftime("%Y-%m-%d")
     idem_key = f"atlas:daily_report:{user_id}:{today_key}"
     settings = get_settings()
     redis_client = aioredis.from_url(settings.redis_url, decode_responses=True)
@@ -1760,18 +1795,15 @@ async def _send_daily_report_async(user_id: UUID) -> dict[str, Any]:
         display_name = user.display_name
         email = user.email
 
-        since = datetime.now(timezone.utc) - timedelta(hours=24)
-        stmt = (
-            select(
-                func.count(Trade.id).label("total"),
-                func.sum(Trade.pnl).label("pnl"),
-                func.sum(func.case((Trade.pnl > 0, 1), else_=0)).label("wins"),
-                func.avg(Trade.pnl).label("avg"),
-                func.max(Trade.pnl).label("best"),
-                func.min(Trade.pnl).label("worst"),
-            )
-            .where(Trade.org_id == org_id, Trade.closed_at >= since)
-        )
+        since = datetime.now(UTC) - timedelta(hours=24)
+        stmt = select(
+            func.count(Trade.id).label("total"),
+            func.sum(Trade.pnl).label("pnl"),
+            func.sum(func.case((Trade.pnl > 0, 1), else_=0)).label("wins"),
+            func.avg(Trade.pnl).label("avg"),
+            func.max(Trade.pnl).label("best"),
+            func.min(Trade.pnl).label("worst"),
+        ).where(Trade.org_id == org_id, Trade.closed_at >= since)
         row = (await db.execute(stmt)).one()
 
     total = int(row.total or 0)
@@ -1809,7 +1841,8 @@ async def _send_daily_report_async(user_id: UUID) -> dict[str, Any]:
             targets["email"] = email
         msg_meta = {"org_id": str(org_id), "user_id": str(user_id)}
         sent_channels = await dispatcher.dispatch_to_all(
-            subject=subject, body=body,
+            subject=subject,
+            body=body,
             meta={**msg_meta, "channel_targets": targets},
             priority="NORMAL",
         )
@@ -1834,6 +1867,7 @@ async def _send_daily_report_async(user_id: UUID) -> dict[str, Any]:
 
 # ── Worker shutdown hook ────────────────────────────────────────────────────
 
+
 @app.task(name="platform.tasks.dispose_db_engine")
 def dispose_db_engine() -> None:
     """Best-effort DB engine disposal — invoke from a Celery worker-shutdown signal."""
@@ -1848,14 +1882,17 @@ def dispose_db_engine() -> None:
 # separate from the worker task means Beat's schedule is independent of DB
 # state (terminals / orgs come and go) and avoids drift.
 
+
 @app.task(name="platform.tasks.fanout_sync_terminal_positions", bind=True, queue="default")
 def fanout_sync_terminal_positions(self: Task) -> dict[str, Any]:
     """Enqueue ``sync_terminal_positions`` for every online terminal."""
     task_name = self.name
     try:
-        result = _run(_fanout_terminal_jobs(
-            "platform.tasks.sync_terminal_positions",
-        ))
+        result = _run(
+            _fanout_terminal_jobs(
+                "platform.tasks.sync_terminal_positions",
+            )
+        )
         _record_result(task_name, ok=True)
         return result
     except Exception:
@@ -1933,9 +1970,11 @@ async def _fanout_terminal_jobs(task_name: str) -> dict[str, Any]:
         try:
             app.send_task(task_name, args=[tid], queue="default")
             enqueued += 1
-        except Exception:  # noqa: BLE001
+        except Exception:
             _log.warning("fanout_enqueue_failed", task=task_name, terminal_id=tid)
-    _log.info("fanout_terminal_jobs_done", task=task_name, total=len(terminal_ids), enqueued=enqueued)
+    _log.info(
+        "fanout_terminal_jobs_done", task=task_name, total=len(terminal_ids), enqueued=enqueued
+    )
     return {"ok": True, "task": task_name, "total": len(terminal_ids), "enqueued": enqueued}
 
 
@@ -1952,7 +1991,7 @@ async def _fanout_org_jobs(task_name: str) -> dict[str, Any]:
         try:
             app.send_task(task_name, args=[oid], queue="default")
             enqueued += 1
-        except Exception:  # noqa: BLE001
+        except Exception:
             _log.warning("fanout_enqueue_failed", task=task_name, org_id=oid)
     _log.info("fanout_org_jobs_done", task=task_name, total=len(org_ids), enqueued=enqueued)
     return {"ok": True, "task": task_name, "total": len(org_ids), "enqueued": enqueued}
@@ -1964,7 +2003,8 @@ async def _fanout_user_jobs(task_name: str) -> dict[str, Any]:
 
     async with db_context() as db:
         stmt = select(User.id).where(
-            User.is_active.is_(True), User.deleted_at.is_(None),
+            User.is_active.is_(True),
+            User.deleted_at.is_(None),
         )
         user_ids = [str(row[0]) for row in (await db.execute(stmt)).fetchall()]
 
@@ -1973,7 +2013,7 @@ async def _fanout_user_jobs(task_name: str) -> dict[str, Any]:
         try:
             app.send_task(task_name, args=[uid], queue="notifications")
             enqueued += 1
-        except Exception:  # noqa: BLE001
+        except Exception:
             _log.warning("fanout_enqueue_failed", task=task_name, user_id=uid)
     _log.info("fanout_user_jobs_done", task=task_name, total=len(user_ids), enqueued=enqueued)
     return {"ok": True, "task": task_name, "total": len(user_ids), "enqueued": enqueued}

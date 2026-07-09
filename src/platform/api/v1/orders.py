@@ -1,19 +1,21 @@
 """Orders REST router — place / list / detail / cancel."""
+
 from __future__ import annotations
 
+from platform.application.commands.place_order import (
+    PlaceOrderCommand,
+    PlaceOrderResult,
+    handle_place_order,
+)
+from platform.core.dependencies import CurrentUser, get_current_user
+from platform.db.models import Order as OrderModel
+from platform.db.session import get_db
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from platform.application.commands.place_order import (
-    PlaceOrderCommand, PlaceOrderResult, handle_place_order,
-)
-from platform.core.dependencies import CurrentUser, get_current_user
-from platform.db.models import Order as OrderModel
-from platform.db.session import get_db
 
 router = APIRouter(prefix="/orders", tags=["orders"])
 
@@ -59,7 +61,9 @@ async def place_order(
     user: CurrentUser = Depends(get_current_user),
 ) -> PlaceOrderResult:
     cmd = PlaceOrderCommand(
-        org_id=user.org_id, user_id=user.user_id, **req.model_dump(),
+        org_id=user.org_id,
+        user_id=user.user_id,
+        **req.model_dump(),
     )
     return await handle_place_order(cmd)
 
@@ -78,12 +82,19 @@ async def list_orders(
     rows = (await db.execute(stmt)).scalars().all()
     return [
         OrderOut(
-            id=r.id, client_order_id=r.client_order_id, broker_order_id=r.broker_order_id,
-            terminal_id=r.terminal_id, symbol=r.symbol, side=r.side, order_type=r.order_type,
-            volume=float(r.volume), price=float(r.price) if r.price else None,
+            id=r.id,
+            client_order_id=r.client_order_id,
+            broker_order_id=r.broker_order_id,
+            terminal_id=r.terminal_id,
+            symbol=r.symbol,
+            side=r.side,
+            order_type=r.order_type,
+            volume=float(r.volume),
+            price=float(r.price) if r.price else None,
             stop_loss=float(r.stop_loss) if r.stop_loss else None,
             take_profit=float(r.take_profit) if r.take_profit else None,
-            status=r.status, filled_volume=float(r.filled_volume),
+            status=r.status,
+            filled_volume=float(r.filled_volume),
             avg_fill_price=float(r.avg_fill_price) if r.avg_fill_price else None,
             rejection_reason=r.rejection_reason,
             created_at=r.created_at.isoformat(),
@@ -101,14 +112,23 @@ async def get_order(
     r = await db.get(OrderModel, order_id)
     if r is None or r.org_id != user.org_id:
         from platform.core.exceptions import NotFoundError
+
         raise NotFoundError(f"Order {order_id} not found")
     return OrderOut(
-        id=r.id, client_order_id=r.client_order_id, broker_order_id=r.broker_order_id,
-        terminal_id=r.terminal_id, symbol=r.symbol, side=r.side, order_type=r.order_type,
-        volume=float(r.volume), price=float(r.price) if r.price else None,
+        id=r.id,
+        client_order_id=r.client_order_id,
+        broker_order_id=r.broker_order_id,
+        terminal_id=r.terminal_id,
+        symbol=r.symbol,
+        side=r.side,
+        order_type=r.order_type,
+        volume=float(r.volume),
+        price=float(r.price) if r.price else None,
         stop_loss=float(r.stop_loss) if r.stop_loss else None,
         take_profit=float(r.take_profit) if r.take_profit else None,
-        status=r.status, filled_volume=float(r.filled_volume),
+        status=r.status,
+        filled_volume=float(r.filled_volume),
         avg_fill_price=float(r.avg_fill_price) if r.avg_fill_price else None,
-        rejection_reason=r.rejection_reason, created_at=r.created_at.isoformat(),
+        rejection_reason=r.rejection_reason,
+        created_at=r.created_at.isoformat(),
     )

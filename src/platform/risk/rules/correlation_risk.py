@@ -11,17 +11,17 @@ order, it pulls the most recent ``lookback_bars`` closed candles for the
 candidate and for every open-position symbol, computes pairwise Pearson
 correlations, and rejects if any exceeds ``max_correlation``.
 """
+
 from __future__ import annotations
 
 import math
-
-from sqlalchemy import desc, select
-
 from platform.core.exceptions import RiskLimitBreached
 from platform.core.logging import get_logger
 from platform.db.models import Candle, Position
 from platform.db.session import db_context
 from platform.risk.engine import OrderContext, RiskRule
+
+from sqlalchemy import desc, select
 
 _log = get_logger(__name__)
 
@@ -98,8 +98,11 @@ class CorrelationRiskRule(RiskRule):
                 .where(Position.org_id == ctx.org_id, Position.status == "open")
                 .distinct()
             )
-            open_symbols = {s for s in (await session.execute(open_symbols_stmt)).scalars().all()
-                            if s != ctx.symbol}
+            open_symbols = {
+                s
+                for s in (await session.execute(open_symbols_stmt)).scalars().all()
+                if s != ctx.symbol
+            }
             if not open_symbols:
                 return  # nothing to be correlated with
 

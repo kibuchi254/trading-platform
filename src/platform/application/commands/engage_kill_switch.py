@@ -11,17 +11,17 @@ The kill switch is process-wide state held on the :class:`RiskEngine`
 singleton; once engaged, every subsequent :meth:`RiskEngine.check_order`
 raises :class:`RiskLimitBreached` and the order never reaches the bridge.
 """
+
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from uuid import UUID
-
-from pydantic import BaseModel
-
+from datetime import UTC, datetime
 from platform.core.logging import get_logger
 from platform.events.bus import get_event_bus
 from platform.events.topics import Topic
 from platform.risk.engine import get_risk_engine
+from uuid import UUID
+
+from pydantic import BaseModel
 
 _log = get_logger(__name__)
 
@@ -50,7 +50,7 @@ async def handle_engage_kill_switch(cmd: EngageKillSwitchCommand) -> EngageKillS
     risk = get_risk_engine()
     risk.kill_switch.engage(reason=cmd.reason)
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     payload = {
         "type": "kill_switch_engaged",
         "org_id": str(cmd.org_id),
@@ -92,7 +92,7 @@ async def handle_engage_kill_switch(cmd: EngageKillSwitchCommand) -> EngageKillS
             },
         )
         notification_dispatched = any(results.values()) if results else False
-    except Exception:  # noqa: BLE001 — notification is best-effort
+    except Exception:
         _log.exception("kill_switch_notification_failed", org_id=str(cmd.org_id))
 
     _log.critical(

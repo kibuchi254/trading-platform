@@ -5,23 +5,32 @@ aggregates here mirror what `platform/db/models/__init__.py` persists but
 contain no SQLAlchemy. Heavy ingestion pipelines (TimescaleDB hypertables, etc.)
 operate on these aggregates via repositories in `infrastructure/`.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 from enum import StrEnum
+from platform.core.exceptions import DomainError
+from platform.domain.shared import (
+    AggregateRoot,
+    DomainEvent,
+    Timeframe,
+    ValueObject,
+)
 from typing import Tuple
 from uuid import UUID, uuid4
 
-from platform.core.exceptions import DomainError
-from platform.domain.shared import (
-    AggregateRoot, DomainEvent, Timeframe, ValueObject,
-)
-
 # Re-export Timeframe so callers can `from platform.domain.market_data import Timeframe`.
 __all__ = [
-    "Tick", "OHLCBar", "SymbolInfo", "TimeframeBucket",
-    "AggregatedBar", "ReplaySession", "ReplayStatus", "Timeframe",
+    "AggregatedBar",
+    "OHLCBar",
+    "ReplaySession",
+    "ReplayStatus",
+    "SymbolInfo",
+    "Tick",
+    "Timeframe",
+    "TimeframeBucket",
 ]
 
 
@@ -35,12 +44,13 @@ class Tick(ValueObject):
     `bid` must be ≤ `ask`; both must be positive. `last` and `volume` may be
     None for symbols that do not report them (e.g. pure FX feeds).
     """
+
     symbol: str
     bid: float
     ask: float
     last: float | None = None
     volume: float | None = None
-    ts: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    ts: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def __post_init__(self) -> None:
         if self.bid <= 0 or self.ask <= 0:
@@ -71,6 +81,7 @@ class SymbolInfo(ValueObject):
     Pure data — no behaviour beyond the `point` derivation. Used by sizing,
     spread-protection, and pip/price conversion logic throughout the platform.
     """
+
     name: str
     description: str = ""
     category: str = "fx"
@@ -104,6 +115,7 @@ class SymbolInfo(ValueObject):
 @dataclass(frozen=True)
 class TimeframeBucket(ValueObject):
     """A (symbol, timeframe, bucket_start_ts) tuple — the identity of a bar."""
+
     symbol: str
     timeframe: Timeframe
     bucket_start: datetime
@@ -155,6 +167,7 @@ class OHLCBar(AggregateRoot):
     `BarFormed`. Subsequent calls extend high/low and overwrite close. `close()`
     freezes the bar and emits `BarClosed`.
     """
+
     symbol: str
     timeframe: Timeframe
     ts: datetime
@@ -178,8 +191,10 @@ class OHLCBar(AggregateRoot):
             self.low = price
             self.record_event(
                 BarFormed(
-                    bar_id=self.id, symbol=self.symbol,
-                    timeframe=self.timeframe.code, ts=self.ts,
+                    bar_id=self.id,
+                    symbol=self.symbol,
+                    timeframe=self.timeframe.code,
+                    ts=self.ts,
                 )
             )
         else:
@@ -203,10 +218,15 @@ class OHLCBar(AggregateRoot):
         self.is_closed = True
         self.record_event(
             BarClosed(
-                bar_id=self.id, symbol=self.symbol,
+                bar_id=self.id,
+                symbol=self.symbol,
                 timeframe=self.timeframe.code,
-                open=self.open, high=self.high, low=self.low, close=self.close,
-                volume=self.volume, tick_count=self.tick_count,
+                open=self.open,
+                high=self.high,
+                low=self.low,
+                close=self.close,
+                volume=self.volume,
+                tick_count=self.tick_count,
             )
         )
 
@@ -223,6 +243,7 @@ class AggregatedBar(AggregateRoot):
     falls outside the current bucket the bar is closed, archived to
     `last_closed_bar`, and a fresh bar is opened.
     """
+
     bucket: TimeframeBucket
     current_bar: OHLCBar | None = None
     last_closed_bar: OHLCBar | None = None
@@ -232,18 +253,16 @@ class AggregatedBar(AggregateRoot):
         seconds = self.bucket.timeframe.seconds
         epoch = int(ts.timestamp())
         floored = (epoch // seconds) * seconds
-        return datetime.fromtimestamp(floored, tz=ts.tzinfo or timezone.utc)
+        return datetime.fromtimestamp(floored, tz=ts.tzinfo or UTC)
 
-    def ingest(self, tick: Tick) -> Tuple[OHLCBar, OHLCBar | None]:
+    def ingest(self, tick: Tick) -> tuple[OHLCBar, OHLCBar | None]:
         """Feed a tick into the aggregator.
 
         Returns `(current_bar_after_update, just_closed_bar_or_None)`. The
         closed bar is returned only on the tick that triggers a bucket roll.
         """
         if tick.symbol != self.bucket.symbol:
-            raise DomainError(
-                f"Tick symbol {tick.symbol} != bucket symbol {self.bucket.symbol}"
-            )
+            raise DomainError(f"Tick symbol {tick.symbol} != bucket symbol {self.bucket.symbol}")
         bucket_start = self._bucket_start_for(tick.ts)
         closed: OHLCBar | None = None
 
@@ -285,11 +304,12 @@ class ReplaySession(AggregateRoot):
     Lifecycle: PENDING → RUNNING ↔ PAUSED → COMPLETED. `current_position` is
     a tick offset into the [start, end] window.
     """
+
     session_id: UUID = field(default_factory=uuid4)
     symbol: str = ""
     timeframe: Timeframe | None = None
-    start: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    end: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    start: datetime = field(default_factory=lambda: datetime.now(UTC))
+    end: datetime = field(default_factory=lambda: datetime.now(UTC))
     speed_multiplier: float = 1.0
     current_position: int = 0
     status: ReplayStatus = ReplayStatus.PENDING
@@ -305,9 +325,7 @@ class ReplaySession(AggregateRoot):
         if self.status != ReplayStatus.PENDING:
             raise DomainError(f"Cannot start session in status {self.status}")
         self.status = ReplayStatus.RUNNING
-        self.record_event(
-            ReplayStarted(session_id=self.session_id, symbol=self.symbol)
-        )
+        self.record_event(ReplayStarted(session_id=self.session_id, symbol=self.symbol))
 
     def pause(self) -> None:
         if self.status != ReplayStatus.RUNNING:

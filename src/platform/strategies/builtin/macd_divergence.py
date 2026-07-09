@@ -24,12 +24,12 @@ lookback : int
 min_strength : float
     Minimum strength threshold; strength scales with how sharp the divergence is.
 """
+
 from __future__ import annotations
 
 from collections import deque
-from typing import Any
-
 from platform.strategies.sdk import Bar, Signal, Strategy, StrategyContext, strategy
+from typing import Any
 
 
 def ema(values: list[float], period: int) -> list[float]:
@@ -49,7 +49,9 @@ def ema(values: list[float], period: int) -> list[float]:
     return out
 
 
-def macd(prices: list[float], fast: int, slow: int, signal: int) -> tuple[list[float], list[float], list[float]]:
+def macd(
+    prices: list[float], fast: int, slow: int, signal: int
+) -> tuple[list[float], list[float], list[float]]:
     """Return (macd_line, signal_line, histogram) series aligned with prices."""
     ema_fast = ema(prices, fast)
     ema_slow = ema(prices, slow)
@@ -114,7 +116,12 @@ class MACDDivergenceStrategy(Strategy):
         prev_high_price = window_prices[prev_high_idx]
         prev_high_hist = window_hist[prev_high_idx]
 
-        meta_base = {"macd": macd_line[-1], "signal": signal_line[-1], "hist": cur_hist, "tf": bar.timeframe}
+        meta_base = {
+            "macd": macd_line[-1],
+            "signal": signal_line[-1],
+            "hist": cur_hist,
+            "tf": bar.timeframe,
+        }
 
         # Bullish divergence: lower low in price, higher low in histogram
         if cur_price < prev_low_price and cur_hist > prev_low_hist:
@@ -122,7 +129,12 @@ class MACDDivergenceStrategy(Strategy):
             hist_lift = cur_hist - prev_low_hist
             strength = min(1.0, 0.4 + price_drop * 5 + abs(hist_lift) * 50)
             if strength >= self.min_strength:
-                return Signal(symbol=bar.symbol, side="buy", strength=strength, meta={**meta_base, "divergence": "bullish"})
+                return Signal(
+                    symbol=bar.symbol,
+                    side="buy",
+                    strength=strength,
+                    meta={**meta_base, "divergence": "bullish"},
+                )
 
         # Bearish divergence: higher high in price, lower high in histogram
         if cur_price > prev_high_price and cur_hist < prev_high_hist:
@@ -130,5 +142,10 @@ class MACDDivergenceStrategy(Strategy):
             hist_drop = prev_high_hist - cur_hist
             strength = min(1.0, 0.4 + price_rise * 5 + abs(hist_drop) * 50)
             if strength >= self.min_strength:
-                return Signal(symbol=bar.symbol, side="sell", strength=strength, meta={**meta_base, "divergence": "bearish"})
+                return Signal(
+                    symbol=bar.symbol,
+                    side="sell",
+                    strength=strength,
+                    meta={**meta_base, "divergence": "bearish"},
+                )
         return None

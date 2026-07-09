@@ -11,23 +11,24 @@ This is the "emergency button" — typically invoked by an operator after a
 kill-switch engagement (see :mod:`platform.application.commands.engage_kill_switch`)
 to bring every position flat on a specific terminal.
 """
+
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from uuid import UUID
-
-from pydantic import BaseModel
-from sqlalchemy import select
-
+from datetime import UTC, datetime
 from platform.core.exceptions import NotFoundError
 from platform.core.logging import get_logger
-from platform.db.models import Order as OrderModel, Position, Terminal
+from platform.db.models import Order as OrderModel
+from platform.db.models import Position, Terminal
 from platform.db.session import db_context
 from platform.events.bus import get_event_bus
 from platform.events.topics import Topic
 from platform.infrastructure.mt5_bridge.command_queue import get_command_queue
 from platform.infrastructure.mt5_bridge.protocol import CommandType, command
 from platform.infrastructure.mt5_bridge.registry import get_registry
+from uuid import UUID
+
+from pydantic import BaseModel
+from sqlalchemy import select
 
 _log = get_logger(__name__)
 
@@ -66,7 +67,7 @@ async def handle_flatten_all(cmd: FlattenAllCommand) -> FlattenAllResult:
     await rec.session.send(cmd_msg)
     await get_command_queue().enqueue(cmd_msg, timeout=30.0)
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     positions_closed = 0
     orders_cancelled = 0
 
@@ -83,12 +84,16 @@ async def handle_flatten_all(cmd: FlattenAllCommand) -> FlattenAllResult:
 
         # Close all open positions for this terminal.
         open_positions = (
-            await db.execute(
-                select(Position).where(
-                    Position.terminal_id == terminal.id, Position.status == "open"
+            (
+                await db.execute(
+                    select(Position).where(
+                        Position.terminal_id == terminal.id, Position.status == "open"
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         for pos in open_positions:
             pos.status = "closed"
             pos.closed_at = now
@@ -100,13 +105,17 @@ async def handle_flatten_all(cmd: FlattenAllCommand) -> FlattenAllResult:
 
         # Cancel every still-pending order.
         pending_orders = (
-            await db.execute(
-                select(OrderModel).where(
-                    OrderModel.terminal_id == terminal.id,
-                    OrderModel.status.in_(_PENDING_ORDER_STATUSES),
+            (
+                await db.execute(
+                    select(OrderModel).where(
+                        OrderModel.terminal_id == terminal.id,
+                        OrderModel.status.in_(_PENDING_ORDER_STATUSES),
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         for order in pending_orders:
             order.status = "cancelled"
             order.rejection_reason = f"flatten_all: {cmd.reason}"

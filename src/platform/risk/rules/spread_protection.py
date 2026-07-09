@@ -16,15 +16,15 @@ Two thresholds are enforced independently — a breach of either rejects:
 * ``max_spread_pct`` — spread as a fraction of the mid price (e.g.
   ``0.001`` = 10 bps).
 """
-from __future__ import annotations
 
-from typing import Any
+from __future__ import annotations
 
 from platform.core.exceptions import RiskLimitBreached
 from platform.core.logging import get_logger
 from platform.events.bus import get_event_bus
 from platform.events.topics import Topic
 from platform.risk.engine import OrderContext, RiskRule
+from typing import Any
 
 _log = get_logger(__name__)
 
@@ -96,8 +96,7 @@ class SpreadProtectionRule(RiskRule):
         if spread_abs < 0:
             # Crossed/invalid quote — block defensively.
             raise RiskLimitBreached(
-                f"spread_protection: crossed quote on {ctx.symbol} "
-                f"(bid={bid}, ask={ask})"
+                f"spread_protection: crossed quote on {ctx.symbol} (bid={bid}, ask={ask})"
             )
         mid = (bid + ask) / 2.0
         if mid <= 0:

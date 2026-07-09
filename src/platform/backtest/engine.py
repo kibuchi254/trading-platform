@@ -6,31 +6,33 @@ broker, then compute performance metrics at the end. The same code path runs in
 backtest and in live mode (live mode uses the BridgeClient adapter instead of
 PaperBrokerAdapter), eliminating backtest/live divergence.
 """
+
 from __future__ import annotations
 
 import asyncio
 import uuid
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Any
-from uuid import UUID
-
-from pydantic import BaseModel, Field
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-
+from datetime import UTC, datetime
+from platform.backtest.metrics import (
+    compute_avg_trade_duration,
+    compute_equity_curve,
+    compute_max_drawdown,
+    compute_profit_factor,
+    compute_returns,
+    compute_sharpe_ratio,
+    compute_sortino_ratio,
+    compute_win_rate,
+)
 from platform.core.logging import get_logger
 from platform.core.telemetry import TASK_DURATION
-from platform.db.models import Backtest as BacktestModel, Strategy, Trade
+from platform.db.models import Backtest as BacktestModel
 from platform.db.session import db_context
 from platform.infrastructure.execution.paper_broker import PaperBrokerAdapter
 from platform.risk.engine import get_risk_engine
 from platform.strategies.sdk import Bar, StrategyContext, get_strategy_registry
-from platform.backtest.metrics import (
-    compute_avg_trade_duration, compute_equity_curve, compute_max_drawdown,
-    compute_profit_factor, compute_sharpe_ratio, compute_sortino_ratio,
-    compute_win_rate, compute_returns,
-)
+from uuid import UUID
+
+from pydantic import BaseModel, Field
+from sqlalchemy import select
 
 _log = get_logger(__name__)
 
@@ -79,17 +81,27 @@ class BacktestEngine:
 
     async def run(self, backtest_id: UUID) -> BacktestResult:
         """Load the backtest row, run, persist results, return."""
-        start_ts = datetime.now(timezone.utc)
+        start_ts = datetime.now(UTC)
         with TASK_DURATION.labels(task="backtest").time():
             async with db_context() as db:
                 bt = await db.get(BacktestModel, backtest_id)
                 if bt is None:
                     return BacktestResult(
-                        backtest_id=backtest_id, status="failed",
-                        initial_capital=0, final_equity=0, total_return_pct=0,
-                        max_drawdown_pct=0, sharpe=0, sortino=0, win_rate=0,
-                        profit_factor=0, total_trades=0, avg_duration_seconds=0,
-                        best_trade=0, worst_trade=0, error="Backtest not found",
+                        backtest_id=backtest_id,
+                        status="failed",
+                        initial_capital=0,
+                        final_equity=0,
+                        total_return_pct=0,
+                        max_drawdown_pct=0,
+                        sharpe=0,
+                        sortino=0,
+                        win_rate=0,
+                        profit_factor=0,
+                        total_trades=0,
+                        avg_duration_seconds=0,
+                        best_trade=0,
+                        worst_trade=0,
+                        error="Backtest not found",
                     )
                 # Update status to running
                 bt.status = "running"
@@ -114,22 +126,33 @@ class BacktestEngine:
             except Exception as e:
                 _log.exception("backtest_failed", backtest_id=str(backtest_id))
                 result = BacktestResult(
-                    backtest_id=backtest_id, status="failed",
-                    initial_capital=config.initial_capital, final_equity=0,
-                    total_return_pct=0, max_drawdown_pct=0, sharpe=0, sortino=0,
-                    win_rate=0, profit_factor=0, total_trades=0,
-                    avg_duration_seconds=0, best_trade=0, worst_trade=0,
+                    backtest_id=backtest_id,
+                    status="failed",
+                    initial_capital=config.initial_capital,
+                    final_equity=0,
+                    total_return_pct=0,
+                    max_drawdown_pct=0,
+                    sharpe=0,
+                    sortino=0,
+                    win_rate=0,
+                    profit_factor=0,
+                    total_trades=0,
+                    avg_duration_seconds=0,
+                    best_trade=0,
+                    worst_trade=0,
                     error=str(e),
                 )
 
             # Persist results
             await self._persist_result(backtest_id, result)
 
-            elapsed = (datetime.now(timezone.utc) - start_ts).total_seconds()
+            elapsed = (datetime.now(UTC) - start_ts).total_seconds()
             _log.info(
                 "backtest_completed",
-                backtest_id=str(backtest_id), status=result.status,
-                elapsed_seconds=elapsed, total_trades=result.total_trades,
+                backtest_id=str(backtest_id),
+                status=result.status,
+                elapsed_seconds=elapsed,
+                total_trades=result.total_trades,
                 sharpe=result.sharpe,
             )
             return result
@@ -158,7 +181,8 @@ class BacktestEngine:
             equity=config.initial_capital,
             margin=0,
             free_margin=config.initial_capital,
-            currency="USD", leverage=100,
+            currency="USD",
+            leverage=100,
         )
 
         # Initialize risk engine
@@ -176,7 +200,7 @@ class BacktestEngine:
         # Iterate bars
         trades: list[dict] = []
         equity_snapshots: list[tuple[datetime, float]] = []
-        point = 10 ** -5  # default digits for FX
+        point = 10**-5  # default digits for FX
         spread = config.spread_points * point
 
         for bar in bars:
@@ -186,17 +210,21 @@ class BacktestEngine:
 
             # Build Bar object for strategy
             strategy_bar = Bar(
-                symbol=config.symbol, timeframe=config.timeframe, ts=bar.ts,
-                open=bar.open, high=bar.high, low=bar.low, close=bar.close,
-                volume=bar.volume, is_closed=True,
+                symbol=config.symbol,
+                timeframe=config.timeframe,
+                ts=bar.ts,
+                open=bar.open,
+                high=bar.high,
+                low=bar.low,
+                close=bar.close,
+                volume=bar.volume,
+                is_closed=True,
             )
 
             # Run strategy
             try:
-                signal = await asyncio.wait_for(
-                    strategy.on_bar(strategy_bar, ctx), timeout=1.0
-                )
-            except asyncio.TimeoutError:
+                signal = await asyncio.wait_for(strategy.on_bar(strategy_bar, ctx), timeout=1.0)
+            except TimeoutError:
                 _log.warning("strategy_timeout", bar_ts=bar.ts.isoformat())
                 continue
             except Exception:
@@ -207,14 +235,17 @@ class BacktestEngine:
             if signal is not None and signal.strength > 0:
                 try:
                     await risk.check_order(
-                        org_id=ctx.org_id, terminal_id="backtest",
-                        symbol=signal.symbol, side=signal.side,
+                        org_id=ctx.org_id,
+                        terminal_id="backtest",
+                        symbol=signal.symbol,
+                        side=signal.side,
                         volume=signal.suggested_volume or 0.01,
                     )
                 except Exception:
                     continue  # risk rejected
 
                 from platform.infrastructure.execution.adapter_base import OrderRequest
+
                 req = OrderRequest(
                     client_order_id=f"bt-{uuid.uuid4().hex[:8]}",
                     symbol=signal.symbol,
@@ -245,17 +276,19 @@ class BacktestEngine:
         # Collect trades
         for pos_id, pos_snap in broker._positions.items():
             if pos_snap.realized_pnl != 0 or True:  # capture all
-                trades.append({
-                    "symbol": pos_snap.symbol,
-                    "side": pos_snap.side,
-                    "volume": pos_snap.volume,
-                    "entry_price": pos_snap.open_price,
-                    "exit_price": pos_snap.current_price,
-                    "pnl": getattr(pos_snap, "realized_pnl", 0.0),
-                    "duration_seconds": 0,  # not tracked in paper broker for now
-                    "opened_at": pos_snap.opened_at.isoformat(),
-                    "closed_at": bar.ts.isoformat(),
-                })
+                trades.append(
+                    {
+                        "symbol": pos_snap.symbol,
+                        "side": pos_snap.side,
+                        "volume": pos_snap.volume,
+                        "entry_price": pos_snap.open_price,
+                        "exit_price": pos_snap.current_price,
+                        "pnl": getattr(pos_snap, "realized_pnl", 0.0),
+                        "duration_seconds": 0,  # not tracked in paper broker for now
+                        "opened_at": pos_snap.opened_at.isoformat(),
+                        "closed_at": bar.ts.isoformat(),
+                    }
+                )
 
         await strategy.on_stop(ctx)
         await broker.disconnect()
@@ -276,13 +309,21 @@ class BacktestEngine:
         worst = min(pnls) if pnls else 0
 
         return BacktestResult(
-            backtest_id=backtest_id, status="completed",
-            initial_capital=config.initial_capital, final_equity=final_equity,
-            total_return_pct=((final_equity - config.initial_capital) / config.initial_capital) * 100,
+            backtest_id=backtest_id,
+            status="completed",
+            initial_capital=config.initial_capital,
+            final_equity=final_equity,
+            total_return_pct=((final_equity - config.initial_capital) / config.initial_capital)
+            * 100,
             max_drawdown_pct=max_dd * 100,
-            sharpe=sharpe, sortino=sortino, win_rate=win_rate,
-            profit_factor=profit_factor, total_trades=len(trades),
-            avg_duration_seconds=avg_dur, best_trade=best, worst_trade=worst,
+            sharpe=sharpe,
+            sortino=sortino,
+            win_rate=win_rate,
+            profit_factor=profit_factor,
+            total_trades=len(trades),
+            avg_duration_seconds=avg_dur,
+            best_trade=best,
+            worst_trade=worst,
             equity_curve=[{"ts": ts.isoformat(), "equity": eq} for ts, eq in equity_snapshots],
             trades=trades,
         )
@@ -290,6 +331,7 @@ class BacktestEngine:
     async def _load_candles(self, config: BacktestConfig) -> list:
         """Load historical candles from DB."""
         from platform.db.models import Candle
+
         async with db_context() as db:
             stmt = (
                 select(Candle)
@@ -329,4 +371,4 @@ class BacktestEngine:
             await db.commit()
 
 
-__all__ = ["BacktestEngine", "BacktestConfig", "BacktestResult"]
+__all__ = ["BacktestConfig", "BacktestEngine", "BacktestResult"]

@@ -1,21 +1,23 @@
 """Test PositionSizeAI — Kelly fraction computation and cap application."""
+
 from __future__ import annotations
-
-from uuid import uuid4
-
-import pytest
 
 from platform.ai.modules.position_size import (
     PositionSizeAI,
     cap_kelly,
     kelly_fraction,
 )
-from platform.ai.orchestrator import AIContext, AIPrediction
+from platform.ai.orchestrator import AIContext
+from uuid import uuid4
+
+import pytest
 
 
 def _ctx(features: dict | None = None) -> AIContext:
     return AIContext(
-        org_id=uuid4(), symbol="XAUUSD", timeframe="M15",
+        org_id=uuid4(),
+        symbol="XAUUSD",
+        timeframe="M15",
         features=features or {},
     )
 
@@ -94,11 +96,16 @@ async def test_position_size_ai_returns_neutral_for_no_equity() -> None:
 async def test_position_size_ai_returns_bullish_with_edge() -> None:
     """A positive Kelly edge yields bullish direction."""
     ai = PositionSizeAI()
-    ctx = _ctx({
-        "win_rate": 0.6, "avg_win": 2.0, "avg_loss": 1.0,
-        "equity": 10_000.0, "max_drawdown_cap": 0.25,
-        "stop_distance": 0.01,
-    })
+    ctx = _ctx(
+        {
+            "win_rate": 0.6,
+            "avg_win": 2.0,
+            "avg_loss": 1.0,
+            "equity": 10_000.0,
+            "max_drawdown_cap": 0.25,
+            "stop_distance": 0.01,
+        }
+    )
     pred = await ai.analyze(ctx)
     assert pred.direction == "bullish"
     assert pred.payload["kelly_fraction"] == pytest.approx(0.4)
@@ -107,12 +114,17 @@ async def test_position_size_ai_returns_bullish_with_edge() -> None:
 async def test_position_size_ai_caps_kelly_fraction() -> None:
     """The capped fraction never exceeds max_drawdown_cap."""
     ai = PositionSizeAI()
-    ctx = _ctx({
-        # Extreme edge → full Kelly > 1.
-        "win_rate": 0.95, "avg_win": 10.0, "avg_loss": 1.0,
-        "equity": 10_000.0, "max_drawdown_cap": 0.25,
-        "stop_distance": 0.01,
-    })
+    ctx = _ctx(
+        {
+            # Extreme edge → full Kelly > 1.
+            "win_rate": 0.95,
+            "avg_win": 10.0,
+            "avg_loss": 1.0,
+            "equity": 10_000.0,
+            "max_drawdown_cap": 0.25,
+            "stop_distance": 0.01,
+        }
+    )
     pred = await ai.analyze(ctx)
     assert pred.payload["capped_fraction"] <= 0.25
 
@@ -120,11 +132,16 @@ async def test_position_size_ai_caps_kelly_fraction() -> None:
 async def test_position_size_ai_suggested_volume_uses_stop_distance() -> None:
     """suggested_volume = (equity * capped_fraction) / (equity * stop_distance)."""
     ai = PositionSizeAI()
-    ctx = _ctx({
-        "win_rate": 0.6, "avg_win": 2.0, "avg_loss": 1.0,
-        "equity": 10_000.0, "max_drawdown_cap": 0.25,
-        "stop_distance": 0.02,
-    })
+    ctx = _ctx(
+        {
+            "win_rate": 0.6,
+            "avg_win": 2.0,
+            "avg_loss": 1.0,
+            "equity": 10_000.0,
+            "max_drawdown_cap": 0.25,
+            "stop_distance": 0.02,
+        }
+    )
     pred = await ai.analyze(ctx)
     # capped = 0.4 * 0.25 = 0.1; risk_per_trade = 10000 * 0.1 = 1000
     # suggested_volume = 1000 / (10000 * 0.02) = 1000 / 200 = 5.0
@@ -135,11 +152,16 @@ async def test_position_size_ai_suggested_volume_uses_stop_distance() -> None:
 async def test_position_size_ai_payload_includes_payoff_ratio() -> None:
     """The payload reports the win_rate and payoff ratio."""
     ai = PositionSizeAI()
-    ctx = _ctx({
-        "win_rate": 0.55, "avg_win": 1.5, "avg_loss": 1.0,
-        "equity": 10_000.0, "max_drawdown_cap": 0.25,
-        "stop_distance": 0.01,
-    })
+    ctx = _ctx(
+        {
+            "win_rate": 0.55,
+            "avg_win": 1.5,
+            "avg_loss": 1.0,
+            "equity": 10_000.0,
+            "max_drawdown_cap": 0.25,
+            "stop_distance": 0.01,
+        }
+    )
     pred = await ai.analyze(ctx)
     assert pred.payload["win_rate"] == pytest.approx(0.55)
     assert pred.payload["payoff_ratio"] == pytest.approx(1.5)
@@ -148,11 +170,16 @@ async def test_position_size_ai_payload_includes_payoff_ratio() -> None:
 async def test_position_size_ai_neutral_when_kelly_is_zero() -> None:
     """No edge (kelly=0) → neutral direction."""
     ai = PositionSizeAI()
-    ctx = _ctx({
-        "win_rate": 0.5, "avg_win": 1.0, "avg_loss": 1.0,
-        "equity": 10_000.0, "max_drawdown_cap": 0.25,
-        "stop_distance": 0.01,
-    })
+    ctx = _ctx(
+        {
+            "win_rate": 0.5,
+            "avg_win": 1.0,
+            "avg_loss": 1.0,
+            "equity": 10_000.0,
+            "max_drawdown_cap": 0.25,
+            "stop_distance": 0.01,
+        }
+    )
     pred = await ai.analyze(ctx)
     assert pred.direction == "neutral"
     assert pred.payload["capped_fraction"] == 0.0

@@ -4,10 +4,10 @@ The dependency is imported lazily inside :meth:`EmailChannel.send` so the
 platform can boot without the package installed when email notifications
 are not used.
 """
+
 from __future__ import annotations
 
 from email.message import EmailMessage
-
 from platform.core.config import get_settings
 from platform.core.logging import get_logger
 from platform.notifications.base import NotificationChannel
@@ -94,7 +94,7 @@ class EmailChannel(NotificationChannel):
             )
             _log.info("email_sent", to=to, subject=subject, port=self.port)
             return True
-        except Exception as exc:  # noqa: BLE001 — log & let dispatcher retry
+        except Exception as exc:
             _log.exception(
                 "email_send_failed",
                 to=to,

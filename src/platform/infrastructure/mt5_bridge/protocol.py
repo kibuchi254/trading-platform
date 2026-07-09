@@ -16,14 +16,15 @@ The protocol is intentionally transport-agnostic. Today it's carried by
 WebSocket; tomorrow it could be gRPC, AMQP, or a FIX-like binary frame.
 Only the framing layer changes — the message envelope does not.
 """
+
 from __future__ import annotations
 
 import enum
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, Literal
-from pydantic import BaseModel, Field
 
+from pydantic import BaseModel, Field
 
 PROTOCOL_VERSION = 1
 
@@ -73,10 +74,11 @@ class EventType(str, enum.Enum):
 
 class BridgeMessage(BaseModel):
     """Wire format — both directions."""
+
     v: int = PROTOCOL_VERSION
     t: str
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    ts: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    ts: datetime = Field(default_factory=lambda: datetime.now(UTC))
     terminal_id: str | None = None
     reply_to: str | None = None  # for responses, echoes the original command id
     payload: dict[str, Any] = Field(default_factory=dict)
@@ -173,14 +175,26 @@ def event(evt: EventType, *, terminal_id: str, payload: dict | None = None) -> B
 def ack(original: BridgeMessage, *, payload: dict | None = None) -> BridgeMessage:
     """Build a server acknowledgement for a terminal command response."""
     return BridgeMessage(
-        t=original.t, reply_to=original.id, terminal_id=original.terminal_id, payload=payload or {},
+        t=original.t,
+        reply_to=original.id,
+        terminal_id=original.terminal_id,
+        payload=payload or {},
     )
 
 
 __all__ = [
-    "PROTOCOL_VERSION", "CommandType", "EventType", "BridgeMessage",
-    "RegisterPayload", "HeartbeatPayload", "TickPayload",
-    "PlaceOrderPayload", "ExecutionReportPayload",
-    "PositionUpdatePayload", "AccountUpdatePayload",
-    "command", "event", "ack",
+    "PROTOCOL_VERSION",
+    "AccountUpdatePayload",
+    "BridgeMessage",
+    "CommandType",
+    "EventType",
+    "ExecutionReportPayload",
+    "HeartbeatPayload",
+    "PlaceOrderPayload",
+    "PositionUpdatePayload",
+    "RegisterPayload",
+    "TickPayload",
+    "ack",
+    "command",
+    "event",
 ]

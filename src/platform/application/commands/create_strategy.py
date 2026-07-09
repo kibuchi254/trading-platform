@@ -1,13 +1,13 @@
 """Create a new strategy."""
+
 from __future__ import annotations
-
-from uuid import UUID
-
-from pydantic import BaseModel
 
 from platform.core.exceptions import ConflictError
 from platform.db.models import Strategy as StrategyModel
 from platform.db.session import db_context
+from uuid import UUID
+
+from pydantic import BaseModel
 
 
 class CreateStrategyCommand(BaseModel):
@@ -49,5 +49,9 @@ async def handle_create_strategy(cmd: CreateStrategyCommand) -> CreateStrategyRe
             raise ConflictError(f"Strategy slug already exists: {cmd.slug}") from e
         await db.refresh(s)
         return CreateStrategyResult(
-            id=s.id, name=s.name, slug=s.slug, kind=s.kind, is_active=s.is_active,
+            id=s.id,
+            name=s.name,
+            slug=s.slug,
+            kind=s.kind,
+            is_active=s.is_active,
         )

@@ -10,17 +10,16 @@ Risk events are append-mostly records produced when a risk rule fires (see
 The "resolved" filter is layered on top via the JSONB ``details`` blob —
 events are considered resolved when ``details.resolved_at`` is present.
 """
+
 from __future__ import annotations
 
 from datetime import datetime
+from platform.db.models import RiskEvent
+from platform.db.session import db_context
 from uuid import UUID
 
 from pydantic import BaseModel
 from sqlalchemy import select
-
-from platform.db.models import RiskEvent
-from platform.db.session import db_context
-
 
 # ── Query + DTO ────────────────────────────────────────────────────────────
 

@@ -12,15 +12,15 @@ The position/account reconciliation logic already lives in
 orchestrates them (plus the orders sync, which has no dedicated command)
 and updates the terminal row.
 """
+
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import Literal
-from uuid import UUID
-
-from pydantic import BaseModel
-from sqlalchemy import select
-
+from datetime import UTC, datetime
+from platform.application.commands.sync_account import SyncAccountCommand, handle_sync_account
+from platform.application.commands.sync_positions import (
+    SyncPositionsCommand,
+    handle_sync_positions,
+)
 from platform.core.exceptions import NotFoundError
 from platform.core.logging import get_logger
 from platform.db.models import Terminal
@@ -30,12 +30,11 @@ from platform.events.topics import Topic
 from platform.infrastructure.mt5_bridge.command_queue import get_command_queue
 from platform.infrastructure.mt5_bridge.protocol import CommandType, command
 from platform.infrastructure.mt5_bridge.registry import get_registry
+from typing import Literal
+from uuid import UUID
 
-from platform.application.commands.sync_account import SyncAccountCommand, handle_sync_account
-from platform.application.commands.sync_positions import (
-    SyncPositionsCommand,
-    handle_sync_positions,
-)
+from pydantic import BaseModel
+from sqlalchemy import select
 
 _log = get_logger(__name__)
 SyncType = Literal["all", "positions", "account", "orders"]
@@ -65,7 +64,7 @@ class SyncTerminalResult(BaseModel):
 
 async def handle_sync_terminal(cmd: SyncTerminalCommand) -> SyncTerminalResult:
     """Run the requested sync subset and store results in DB."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     synced_positions = closed_positions = synced_orders = 0
     account_synced = False
 
@@ -80,9 +79,7 @@ async def handle_sync_terminal(cmd: SyncTerminalCommand) -> SyncTerminalResult:
 
     if cmd.sync_type in ("all", "account"):
         await handle_sync_account(
-            SyncAccountCommand(
-                org_id=cmd.org_id, user_id=cmd.user_id, terminal_id=cmd.terminal_id
-            )
+            SyncAccountCommand(org_id=cmd.org_id, user_id=cmd.user_id, terminal_id=cmd.terminal_id)
         )
         account_synced = True
 
@@ -112,10 +109,14 @@ async def handle_sync_terminal(cmd: SyncTerminalCommand) -> SyncTerminalResult:
     await get_event_bus().publish(
         Topic.TERMINAL_EVENTS,
         {
-            "type": "terminal_synced", "org_id": str(cmd.org_id),
-            "terminal_id": cmd.terminal_id, "sync_type": cmd.sync_type,
-            "synced_positions": synced_positions, "closed_positions": closed_positions,
-            "synced_orders": synced_orders, "account_synced": account_synced,
+            "type": "terminal_synced",
+            "org_id": str(cmd.org_id),
+            "terminal_id": cmd.terminal_id,
+            "sync_type": cmd.sync_type,
+            "synced_positions": synced_positions,
+            "closed_positions": closed_positions,
+            "synced_orders": synced_orders,
+            "account_synced": account_synced,
         },
     )
     _log.info("terminal_synced", terminal_id=cmd.terminal_id, sync_type=cmd.sync_type)

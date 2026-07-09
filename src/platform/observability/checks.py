@@ -17,14 +17,14 @@ The checks here are the platform-default probes registered by
 * :class:`DiskSpaceHealthCheck` — Postgres data volume headroom
 * :class:`MemoryHealthCheck` — host RAM pressure
 """
+
 from __future__ import annotations
 
 import time
-from typing import Any
-
 from platform.core.config import get_settings
 from platform.core.logging import get_logger
 from platform.observability.health import HealthCheck, HealthState, HealthStatus
+from typing import Any
 
 _log = get_logger(__name__)
 
@@ -45,6 +45,7 @@ class DatabaseHealthCheck(HealthCheck):
         start = time.monotonic()
         try:
             from platform.db.session import db_context
+
             from sqlalchemy import text
 
             async with db_context() as session:
@@ -65,7 +66,7 @@ class DatabaseHealthCheck(HealthCheck):
                 latency_ms=latency_ms,
                 message="Database reachable",
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             latency_ms = (time.monotonic() - start) * 1000.0
             return HealthStatus(
                 name=self.name,
@@ -108,7 +109,7 @@ class RedisHealthCheck(HealthCheck):
                 message="Redis PING ok" if pong else "Redis PING returned False",
                 details={"pong": pong},
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             latency_ms = (time.monotonic() - start) * 1000.0
             return HealthStatus(
                 name=self.name,
@@ -159,7 +160,7 @@ class BridgeHealthCheck(HealthCheck):
                 message=message,
                 details={"terminals_online": count, "min_required": self.min_terminals},
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             latency_ms = (time.monotonic() - start) * 1000.0
             return HealthStatus(
                 name=self.name,
@@ -213,7 +214,7 @@ class CeleryHealthCheck(HealthCheck):
                 message=f"{len(workers)} Celery worker(s) online",
                 details={"workers": workers},
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             latency_ms = (time.monotonic() - start) * 1000.0
             return HealthStatus(
                 name=self.name,
@@ -262,7 +263,7 @@ class RiskEngineHealthCheck(HealthCheck):
                 message="Risk engine nominal, kill switch disengaged",
                 details={"kill_switch": False, "rules": rule_count},
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             latency_ms = (time.monotonic() - start) * 1000.0
             return HealthStatus(
                 name=self.name,
@@ -290,8 +291,9 @@ class DiskSpaceHealthCheck(HealthCheck):
     WARN_PCT = 0.20  # <20 % free → DEGRADED
     CRIT_PCT = 0.05  # <5 % free → UNHEALTHY
 
-    def __init__(self, path: str = DEFAULT_PATH, warn_pct: float = WARN_PCT,
-                 crit_pct: float = CRIT_PCT) -> None:
+    def __init__(
+        self, path: str = DEFAULT_PATH, warn_pct: float = WARN_PCT, crit_pct: float = CRIT_PCT
+    ) -> None:
         self.path = path
         self.warn_pct = warn_pct
         self.crit_pct = crit_pct
@@ -325,7 +327,7 @@ class DiskSpaceHealthCheck(HealthCheck):
                     "free_pct": round(free_pct, 4),
                 },
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             latency_ms = (time.monotonic() - start) * 1000.0
             return HealthStatus(
                 name=self.name,
@@ -384,7 +386,7 @@ class MemoryHealthCheck(HealthCheck):
                     "used_pct": round(used_pct, 4),
                 },
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             latency_ms = (time.monotonic() - start) * 1000.0
             return HealthStatus(
                 name=self.name,

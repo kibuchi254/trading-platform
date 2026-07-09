@@ -6,15 +6,15 @@ the bridge layer via `TerminalRegistered` / `TerminalWentOffline` events).
 keeps the same shape as the others and a future aggregate can be dropped in
 without touching callers.
 """
+
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from platform.db.models import Terminal
 from uuid import UUID
 
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from platform.db.models import Terminal
 
 
 class TerminalRepository:
@@ -44,7 +44,11 @@ class TerminalRepository:
         return (await self.db.execute(stmt)).scalar_one_or_none()
 
     async def list_by_org(
-        self, org_id: UUID, *, status: str | None = None, limit: int = 200,
+        self,
+        org_id: UUID,
+        *,
+        status: str | None = None,
+        limit: int = 200,
     ) -> list[Terminal]:
         stmt = select(Terminal).where(Terminal.org_id == org_id)
         if status:
@@ -53,9 +57,14 @@ class TerminalRepository:
         return list((await self.db.execute(stmt)).scalars().all())
 
     async def list_by_status(self, org_id: UUID, status: str) -> list[Terminal]:
-        stmt = select(Terminal).where(
-            Terminal.org_id == org_id, Terminal.status == status,
-        ).order_by(Terminal.last_heartbeat_at.desc().nullslast())
+        stmt = (
+            select(Terminal)
+            .where(
+                Terminal.org_id == org_id,
+                Terminal.status == status,
+            )
+            .order_by(Terminal.last_heartbeat_at.desc().nullslast())
+        )
         return list((await self.db.execute(stmt)).scalars().all())
 
     # ── Writes ──────────────────────────────────────────────────────────────
@@ -73,12 +82,16 @@ class TerminalRepository:
         return entity
 
     async def update_heartbeat(
-        self, id: UUID, *, ip: str | None = None, status: str = "online",
+        self,
+        id: UUID,
+        *,
+        ip: str | None = None,
+        status: str = "online",
     ) -> bool:
         values: dict = {
-            "last_heartbeat_at": datetime.now(timezone.utc),
+            "last_heartbeat_at": datetime.now(UTC),
             "status": status,
-            "updated_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(UTC),
         }
         if ip is not None:
             values["last_seen_ip"] = ip
@@ -88,9 +101,13 @@ class TerminalRepository:
         return (result.rowcount or 0) > 0
 
     async def update_status(self, id: UUID, status: str) -> bool:
-        stmt = update(Terminal).where(Terminal.id == id).values(
-            status=status,
-            updated_at=datetime.now(timezone.utc),
+        stmt = (
+            update(Terminal)
+            .where(Terminal.id == id)
+            .values(
+                status=status,
+                updated_at=datetime.now(UTC),
+            )
         )
         result = await self.db.execute(stmt)
         await self.db.flush()

@@ -5,14 +5,14 @@ Wraps the raw WebSocket connection and provides:
 - backpressure handling
 - graceful close
 """
+
 from __future__ import annotations
 
 import asyncio
 import uuid
-from typing import TYPE_CHECKING
-
 from platform.core.logging import get_logger
 from platform.infrastructure.mt5_bridge.protocol import BridgeMessage
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from websockets.asyncio.server import ServerConnection
@@ -24,7 +24,7 @@ class BridgeSession:
     """One per WebSocket connection. Identified by `id` (server-assigned)
     until the terminal registers with its own `terminal_id`."""
 
-    def __init__(self, ws: "ServerConnection") -> None:
+    def __init__(self, ws: ServerConnection) -> None:
         self.id: str = str(uuid.uuid4())
         self.ws = ws
         self.terminal_id: str | None = None  # set after REGISTER
@@ -50,6 +50,12 @@ class BridgeSession:
         self._closed = True
         try:
             await self.ws.close(code=code, reason=reason)
-        except Exception:  # noqa: BLE001
+        except Exception:
             pass
-        _log.info("session_closed", session_id=self.id, terminal_id=self.terminal_id, code=code, reason=reason)
+        _log.info(
+            "session_closed",
+            session_id=self.id,
+            terminal_id=self.terminal_id,
+            code=code,
+            reason=reason,
+        )

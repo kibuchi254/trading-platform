@@ -8,13 +8,12 @@ The MT5 Bridge is one such adapter. Other examples:
 - FixAdapter: FIX 4.4 / 5.0 broker connectivity
 - CryptoExchangeAdapter: REST + WebSocket to Binance/Bybit/OKX
 """
+
 from __future__ import annotations
 
 import abc
-from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Literal
-from uuid import UUID
 
 from pydantic import BaseModel
 
@@ -83,12 +82,18 @@ class ExecutionAdapter(abc.ABC):
     async def cancel_order(self, broker_order_id: str) -> ExecutionReport: ...
 
     @abc.abstractmethod
-    async def close_position(self, broker_position_id: str, volume: float | None = None) -> ExecutionReport: ...
+    async def close_position(
+        self, broker_position_id: str, volume: float | None = None
+    ) -> ExecutionReport: ...
 
     @abc.abstractmethod
-    async def modify_position(self, broker_position_id: str, *,
-                              stop_loss: float | None = None,
-                              take_profit: float | None = None) -> ExecutionReport: ...
+    async def modify_position(
+        self,
+        broker_position_id: str,
+        *,
+        stop_loss: float | None = None,
+        take_profit: float | None = None,
+    ) -> ExecutionReport: ...
 
     @abc.abstractmethod
     async def sync_positions(self) -> list[PositionSnapshot]: ...
@@ -100,5 +105,6 @@ class ExecutionAdapter(abc.ABC):
     async def subscribe_ticks(self, symbols: list[str]) -> None: ...
 
     @abc.abstractmethod
-    async def get_history(self, *, symbol: str, timeframe: str,
-                          start: datetime, end: datetime) -> list[dict[str, Any]]: ...
+    async def get_history(
+        self, *, symbol: str, timeframe: str, start: datetime, end: datetime
+    ) -> list[dict[str, Any]]: ...

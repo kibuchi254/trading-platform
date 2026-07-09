@@ -29,6 +29,7 @@ Risk-threshold checks (``check_risk_thresholds``) are also fan-out:
 ``platform.tasks.fanout_check_risk_thresholds`` enqueues one
 ``check_risk_thresholds`` per org.
 """
+
 from __future__ import annotations
 
 from celery.schedules import crontab, schedule

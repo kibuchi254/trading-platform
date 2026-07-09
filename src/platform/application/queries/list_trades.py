@@ -9,17 +9,16 @@ Trades are append-only historical records produced when a Position closes
 (see :mod:`platform.application.commands.close_position`). They are the
 input to the analytics / performance queries.
 """
+
 from __future__ import annotations
 
 from datetime import datetime
+from platform.db.models import Trade
+from platform.db.session import db_context
 from uuid import UUID
 
 from pydantic import BaseModel
 from sqlalchemy import select
-
-from platform.db.models import Trade
-from platform.db.session import db_context
-
 
 # ── Query + DTO ────────────────────────────────────────────────────────────
 

@@ -1,4 +1,5 @@
 """Platform exception hierarchy. Maps cleanly to HTTP status codes via FastAPI handlers."""
+
 from __future__ import annotations
 
 
@@ -8,7 +9,9 @@ class PlatformError(Exception):
     code: str = "platform.error"
     http_status: int = 500
 
-    def __init__(self, message: str = "", *, code: str | None = None, http_status: int | None = None) -> None:
+    def __init__(
+        self, message: str = "", *, code: str | None = None, http_status: int | None = None
+    ) -> None:
         super().__init__(message or self.code)
         self.message = message or self.code
         if code:

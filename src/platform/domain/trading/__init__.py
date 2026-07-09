@@ -3,19 +3,26 @@
 This is pure business logic. Persistence is handled by repositories in
 `infrastructure/`. No SQLAlchemy, no HTTP, no I/O here.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 from enum import StrEnum
-from typing import TYPE_CHECKING
-from uuid import UUID, uuid4
-
 from platform.core.exceptions import DomainError
 from platform.domain.shared import (
-    AggregateRoot, DomainEvent, Money, OrderFilled, OrderPlaced,
-    PositionClosed, PositionOpened, Price, Quantity,
+    AggregateRoot,
+    DomainEvent,
+    Money,
+    OrderFilled,
+    OrderPlaced,
+    PositionClosed,
+    PositionOpened,
+    Price,
+    Quantity,
 )
+from typing import TYPE_CHECKING
+from uuid import UUID, uuid4
 
 if TYPE_CHECKING:
     pass
@@ -66,7 +73,7 @@ class Order(AggregateRoot):
     avg_fill_price: float | None = None
     strategy_id: UUID | None = None
     rejection_reason: str | None = None
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     submitted_at: datetime | None = None
     filled_at: datetime | None = None
 
@@ -76,7 +83,7 @@ class Order(AggregateRoot):
         if self.status not in (OrderStatus.PENDING,):
             raise DomainError(f"Cannot submit order in status {self.status}")
         self.status = OrderStatus.SUBMITTED
-        self.submitted_at = datetime.now(timezone.utc)
+        self.submitted_at = datetime.now(UTC)
 
     def apply_fill(self, filled_volume: float, fill_price: float) -> list[DomainEvent]:
         if self.status in (OrderStatus.FILLED, OrderStatus.CANCELLED, OrderStatus.REJECTED):
@@ -87,27 +94,27 @@ class Order(AggregateRoot):
         prev = self.filled_volume
         new_total = prev + filled_volume
         if new_total > self.volume.volume:
-            raise DomainError(
-                f"Fill {new_total} exceeds order volume {self.volume.volume}"
-            )
+            raise DomainError(f"Fill {new_total} exceeds order volume {self.volume.volume}")
         # Update weighted average
         if self.avg_fill_price is None:
             self.avg_fill_price = fill_price
         else:
             self.avg_fill_price = (
-                (prev * self.avg_fill_price + filled_volume * fill_price) / new_total
-            )
+                prev * self.avg_fill_price + filled_volume * fill_price
+            ) / new_total
         self.filled_volume = new_total
         execution_id = uuid4()
         events: list[DomainEvent] = [
             OrderFilled(
-                order_id=self.id, execution_id=execution_id,
-                filled_volume=filled_volume, fill_price=fill_price,
+                order_id=self.id,
+                execution_id=execution_id,
+                filled_volume=filled_volume,
+                fill_price=fill_price,
             )
         ]
         if new_total == self.volume.volume:
             self.status = OrderStatus.FILLED
-            self.filled_at = datetime.now(timezone.utc)
+            self.filled_at = datetime.now(UTC)
         else:
             self.status = OrderStatus.PARTIAL
         return events
@@ -129,8 +136,10 @@ class Order(AggregateRoot):
             raise DomainError("Order already submitted")
         self.record_event(
             OrderPlaced(
-                order_id=self.id, terminal_id=self.terminal_id,
-                symbol=self.symbol, side=self.side.value,
+                order_id=self.id,
+                terminal_id=self.terminal_id,
+                symbol=self.symbol,
+                side=self.side.value,
                 volume=self.volume.volume,
             )
         )
@@ -173,9 +182,11 @@ class Position(AggregateRoot):
         if self.status != PositionStatus.OPEN:
             raise DomainError("Position already closed")
         direction = 1 if self.side == OrderSide.BUY else -1
-        self.realized_pnl = direction * (close_price.value - self.open_price.value) * self.volume.volume
+        self.realized_pnl = (
+            direction * (close_price.value - self.open_price.value) * self.volume.volume
+        )
         self.current_price = close_price
         self.status = PositionStatus.CLOSED
-        self.closed_at = datetime.now(timezone.utc)
+        self.closed_at = datetime.now(UTC)
         self.record_event(PositionClosed(position_id=self.id, pnl=self.realized_pnl))
         return self.collect_events()

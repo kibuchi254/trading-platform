@@ -1,9 +1,6 @@
 """Test the Strategy + Signal aggregates — lifecycle transitions, events."""
+
 from __future__ import annotations
-
-from uuid import uuid4
-
-import pytest
 
 from platform.core.exceptions import DomainError
 from platform.domain.shared import Price, Symbol, Timeframe
@@ -16,12 +13,17 @@ from platform.domain.strategy import (
     Strategy,
     StrategyConfig,
 )
+from uuid import uuid4
+
+import pytest
 
 
 def _make_strategy() -> Strategy:
     """Build a fresh inactive Strategy aggregate."""
     return Strategy(
-        org_id=uuid4(), name="My EMA Cross", slug="my-ema-cross",
+        org_id=uuid4(),
+        name="My EMA Cross",
+        slug="my-ema-cross",
         kind="ema_cross",
     )
 
@@ -29,7 +31,9 @@ def _make_strategy() -> Strategy:
 def _make_signal(strength: float = 0.8) -> Signal:
     """Build a fresh PENDING Signal aggregate."""
     return Signal(
-        org_id=uuid4(), strategy_id=uuid4(), terminal_id=uuid4(),
+        org_id=uuid4(),
+        strategy_id=uuid4(),
+        terminal_id=uuid4(),
         symbol=Symbol(name="XAUUSD"),
         side=SignalSide.BUY,
         strength=SignalStrength(value=strength),
@@ -207,10 +211,14 @@ def test_signal_cannot_expire_executed() -> None:
 def test_signal_manual_source_round_trip() -> None:
     """Signal.source can be set to MANUAL at construction."""
     sig = Signal(
-        org_id=uuid4(), strategy_id=uuid4(), terminal_id=uuid4(),
+        org_id=uuid4(),
+        strategy_id=uuid4(),
+        terminal_id=uuid4(),
         symbol=Symbol(name="EURUSD"),
-        side=SignalSide.SELL, strength=SignalStrength(value=0.6),
-        timeframe=Timeframe(code="M5"), price=Price(value=1.0850),
+        side=SignalSide.SELL,
+        strength=SignalStrength(value=0.6),
+        timeframe=Timeframe(code="M5"),
+        price=Price(value=1.0850),
         source=SignalSource.MANUAL,
     )
     assert sig.source == SignalSource.MANUAL

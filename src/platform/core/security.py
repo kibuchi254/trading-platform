@@ -1,16 +1,16 @@
 """JWT issuance + verification, password hashing, API-key utilities."""
+
 from __future__ import annotations
 
 import secrets as _secrets
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
+from platform.core.config import get_settings
 from typing import Literal
 
 import jwt
 from passlib.context import CryptContext
-
-from platform.core.config import get_settings
 
 _pwd = CryptContext(schemes=["bcrypt"], deprecated="auto", bcrypt__rounds=12)
 Alg = Literal["HS256", "HS384", "HS512", "RS256"]
@@ -34,7 +34,7 @@ def verify_password(raw: str, hashed: str) -> bool:
 
 def _encode(payload: dict[str, object], ttl: int) -> str:
     settings = get_settings()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     payload = {**payload, "iat": now, "exp": now + timedelta(seconds=ttl)}
     return jwt.encode(
         payload,

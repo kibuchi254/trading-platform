@@ -30,15 +30,15 @@ the subsystem-specific registries (StrategyRegistry, AIOrchestrator,
 RiskEngine) so the catalog reflects everything that has been registered
 via decorators.
 """
+
 from __future__ import annotations
 
 import importlib
 import importlib.util
 import pkgutil
 from pathlib import Path
-from typing import Any
-
 from platform.core.logging import get_logger
+from typing import Any
 
 _log = get_logger(__name__)
 
@@ -102,9 +102,7 @@ class PluginLoader:
             If ``kind`` is not a recognised plugin kind.
         """
         if kind not in self._registries:
-            raise ValueError(
-                f"Unknown plugin kind: {kind!r}. Expected one of {self.KINDS}"
-            )
+            raise ValueError(f"Unknown plugin kind: {kind!r}. Expected one of {self.KINDS}")
         self._registries[kind][name] = plugin
         _log.info("plugin_registered", kind=kind, name=name)
 
@@ -128,7 +126,7 @@ class PluginLoader:
         for kind, package_path in BUILTIN_PACKAGES:
             try:
                 package = importlib.import_module(package_path)
-            except Exception:  # noqa: BLE001
+            except Exception:
                 _log.exception("builtin_package_import_failed", package=package_path)
                 continue
             for _finder, mod_name, _is_pkg in pkgutil.walk_packages(
@@ -140,7 +138,7 @@ class PluginLoader:
                     importlib.import_module(mod_name)
                     self._loaded.add(mod_name)
                     _log.debug("builtin_plugin_loaded", module=mod_name)
-                except Exception:  # noqa: BLE001
+                except Exception:
                     _log.exception("builtin_plugin_load_failed", module=mod_name)
         self._mirror_subsystem_registries()
 
@@ -156,8 +154,9 @@ class PluginLoader:
         """
         try:
             from importlib.metadata import entry_points
+
             eps = entry_points()
-        except Exception:  # noqa: BLE001 — environment without metadata
+        except Exception:
             _log.warning("entry_points_unavailable")
             return
 
@@ -173,10 +172,11 @@ class PluginLoader:
                         fn()
                     self._loaded.add(ep_key)
                     _log.info("entry_point_plugin_loaded", group=group, name=ep.name)
-                except Exception:  # noqa: BLE001
+                except Exception:
                     _log.exception(
                         "entry_point_plugin_load_failed",
-                        group=group, name=ep.name,
+                        group=group,
+                        name=ep.name,
                     )
         self._mirror_subsystem_registries()
 
@@ -276,7 +276,7 @@ class PluginLoader:
             strat_reg = get_strategy_registry()
             for name, cls in getattr(strat_reg, "_strategies", {}).items():
                 self._registries["strategies"].setdefault(name, cls)
-        except Exception:  # noqa: BLE001
+        except Exception:
             _log.debug("strategy_registry_mirror_skipped")
 
         # AI modules
@@ -286,7 +286,7 @@ class PluginLoader:
             orch = get_ai_orchestrator()
             for name, mod in getattr(orch, "_modules", {}).items():
                 self._registries["ai_modules"].setdefault(name, mod)
-        except Exception:  # noqa: BLE001
+        except Exception:
             _log.debug("ai_registry_mirror_skipped")
 
         # Risk rules
@@ -298,7 +298,7 @@ class PluginLoader:
                 name = getattr(rule, "name", None)
                 if name:
                     self._registries["risk_rules"].setdefault(name, rule)
-        except Exception:  # noqa: BLE001
+        except Exception:
             _log.debug("risk_registry_mirror_skipped")
 
 

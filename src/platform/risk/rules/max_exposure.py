@@ -15,15 +15,16 @@ The new order's notional is estimated using ``ctx.volume * ctx.price``
 (or the latest position ``current_price`` if ``ctx.price`` is None —
 e.g. for market orders).
 """
-from __future__ import annotations
 
-from sqlalchemy import select
+from __future__ import annotations
 
 from platform.core.exceptions import RiskLimitBreached
 from platform.core.logging import get_logger
 from platform.db.models import Position, Symbol
 from platform.db.session import db_context
 from platform.risk.engine import OrderContext, RiskRule
+
+from sqlalchemy import select
 
 _log = get_logger(__name__)
 
@@ -92,9 +93,13 @@ class MaxExposureRule(RiskRule):
             total += notional
 
         # Notional of the new order.
-        price = ctx.price if ctx.price is not None else (
+        price = (
+            ctx.price
+            if ctx.price is not None
             # Fallback: use latest known current_price on existing position
-            per_symbol.get(ctx.symbol, 0.0) / 1.0  # rough; rules below still apply
+            else (
+                per_symbol.get(ctx.symbol, 0.0) / 1.0  # rough; rules below still apply
+            )
         )
         new_notional = ctx.volume * (price or 0.0) * contract_size
 

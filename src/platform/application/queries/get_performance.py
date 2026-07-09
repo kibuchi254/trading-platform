@@ -12,17 +12,16 @@ worst, avg_duration) come from a single SQL fold. Profit factor is
 is computed in Python from the running PnL stream — a SQL window would be
 faster but is awkward to express portably across PG / SQLite.
 """
+
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
+from platform.db.models import Trade
+from platform.db.session import db_context
 from uuid import UUID
 
 from pydantic import BaseModel
 from sqlalchemy import func, select
-
-from platform.db.models import Trade
-from platform.db.session import db_context
-
 
 # ── Query + DTO ────────────────────────────────────────────────────────────
 
@@ -59,7 +58,7 @@ class GetPerformanceResult(BaseModel):
 async def handle_get_performance(query: GetPerformanceQuery) -> GetPerformanceResult:
     """Fold the trailing-N-days trade stream into a KPI summary."""
     days = max(1, min(query.days, 365))
-    since = datetime.now(timezone.utc) - timedelta(days=days)
+    since = datetime.now(UTC) - timedelta(days=days)
 
     async with db_context() as db:
         base = select(Trade).where(Trade.org_id == query.org_id, Trade.closed_at >= since)
@@ -97,9 +96,7 @@ async def handle_get_performance(query: GetPerformanceQuery) -> GetPerformanceRe
     win_rate = (wins / total_trades) if total_trades else 0.0
     gross_profit = float(row.gross_profit or 0)
     gross_loss_abs = abs(float(row.gross_loss or 0))
-    profit_factor = (
-        (gross_profit / gross_loss_abs) if gross_loss_abs > 0 else None
-    )
+    profit_factor = (gross_profit / gross_loss_abs) if gross_loss_abs > 0 else None
     max_drawdown = _max_drawdown(pnl_stream)
 
     summary = PerformanceSummary(
@@ -118,7 +115,7 @@ async def handle_get_performance(query: GetPerformanceQuery) -> GetPerformanceRe
     )
     return GetPerformanceResult(
         summary=summary,
-        computed_at=datetime.now(timezone.utc).isoformat(),
+        computed_at=datetime.now(UTC).isoformat(),
     )
 
 

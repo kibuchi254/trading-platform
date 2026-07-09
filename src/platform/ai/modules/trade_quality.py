@@ -6,11 +6,11 @@ timestamp vs optimal execution window), and size appropriateness
 (actual vs ideal volume). Emits an overall score and per-trade
 recommendations for routing and sizing improvements.
 """
+
 from __future__ import annotations
 
-from typing import Any
-
 from platform.ai.orchestrator import AIContext, AIModule, AIPrediction
+from typing import Any
 
 
 def score_slippage(requested: float, actual: float, atr: float) -> float:
@@ -55,6 +55,7 @@ class TradeQualityAI(AIModule):
     Returns an overall score (0–1) plus breakdowns and recommendations.
     Direction is always neutral; confidence mirrors the overall score.
     """
+
     name = "trade_quality"
     version = "1.0.0"
 
@@ -62,10 +63,17 @@ class TradeQualityAI(AIModule):
         trades = ctx.features.get("recent_trades", []) or []
         if not trades:
             return AIPrediction(
-                module=self.name, symbol=ctx.symbol, direction="neutral",
-                confidence=0.1, horizon="short",
-                payload={"overall_score": 0.0, "slippage_score": 0.0,
-                         "timing_score": 0.0, "recommendations": []},
+                module=self.name,
+                symbol=ctx.symbol,
+                direction="neutral",
+                confidence=0.1,
+                horizon="short",
+                payload={
+                    "overall_score": 0.0,
+                    "slippage_score": 0.0,
+                    "timing_score": 0.0,
+                    "recommendations": [],
+                },
             )
         slip_scores: list[float] = []
         time_scores: list[float] = []
@@ -103,8 +111,11 @@ class TradeQualityAI(AIModule):
         if not recommendations:
             recommendations.append("Execution quality is within tolerance")
         return AIPrediction(
-            module=self.name, symbol=ctx.symbol, direction="neutral",
-            confidence=min(1.0, overall), horizon="short",
+            module=self.name,
+            symbol=ctx.symbol,
+            direction="neutral",
+            confidence=min(1.0, overall),
+            horizon="short",
             payload={
                 "overall_score": round(overall, 3),
                 "slippage_score": round(avg_slip, 3),

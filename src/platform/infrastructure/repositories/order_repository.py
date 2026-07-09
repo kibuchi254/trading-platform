@@ -5,16 +5,17 @@ Converts between `OrderModel` rows and the domain `Order` aggregate (which uses
 `OrderStatus` enums). The repository is the only place SQLAlchemy touches an
 Order — application + domain layers depend on the aggregate alone.
 """
+
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from platform.db.models import Order as OrderModel
+from platform.domain.shared import Price, Quantity
+from platform.domain.trading import Order, OrderSide, OrderStatus, OrderType
 from uuid import UUID
 
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-from platform.db.models import Order as OrderModel
-from platform.domain.shared import Price, Quantity
-from platform.domain.trading import Order, OrderSide, OrderStatus, OrderType
 
 
 class OrderRepository:
@@ -28,9 +29,13 @@ class OrderRepository:
     @staticmethod
     def to_domain(m: OrderModel) -> Order:
         order = Order(
-            id=m.id, org_id=m.org_id, terminal_id=m.terminal_id,
-            client_order_id=m.client_order_id, symbol=m.symbol,
-            side=OrderSide(m.side), order_type=OrderType(m.order_type),
+            id=m.id,
+            org_id=m.org_id,
+            terminal_id=m.terminal_id,
+            client_order_id=m.client_order_id,
+            symbol=m.symbol,
+            side=OrderSide(m.side),
+            order_type=OrderType(m.order_type),
             volume=Quantity(volume=float(m.volume)),
             price=Price(value=float(m.price)) if m.price is not None else None,
             stop_loss=Price(value=float(m.stop_loss)) if m.stop_loss is not None else None,
@@ -38,8 +43,11 @@ class OrderRepository:
             status=OrderStatus(m.status),
             filled_volume=float(m.filled_volume or 0),
             avg_fill_price=float(m.avg_fill_price) if m.avg_fill_price is not None else None,
-            strategy_id=m.strategy_id, rejection_reason=m.rejection_reason,
-            created_at=m.created_at, submitted_at=m.submitted_at, filled_at=m.filled_at,
+            strategy_id=m.strategy_id,
+            rejection_reason=m.rejection_reason,
+            created_at=m.created_at,
+            submitted_at=m.submitted_at,
+            filled_at=m.filled_at,
         )
         # Side-channel ORM-only fields so save() can write them back.
         order.broker_order_id = m.broker_order_id  # type: ignore[attr-defined]
@@ -49,18 +57,26 @@ class OrderRepository:
     @staticmethod
     def from_domain(e: Order) -> OrderModel:
         return OrderModel(
-            id=e.id, org_id=e.org_id, terminal_id=e.terminal_id,
-            strategy_id=e.strategy_id, signal_id=getattr(e, "signal_id", None),
+            id=e.id,
+            org_id=e.org_id,
+            terminal_id=e.terminal_id,
+            strategy_id=e.strategy_id,
+            signal_id=getattr(e, "signal_id", None),
             client_order_id=e.client_order_id,
             broker_order_id=getattr(e, "broker_order_id", None),
-            symbol=e.symbol, side=e.side.value, order_type=e.order_type.value,
+            symbol=e.symbol,
+            side=e.side.value,
+            order_type=e.order_type.value,
             volume=e.volume.volume,
             price=e.price.value if e.price is not None else None,
             stop_loss=e.stop_loss.value if e.stop_loss is not None else None,
             take_profit=e.take_profit.value if e.take_profit is not None else None,
-            status=e.status.value, filled_volume=e.filled_volume,
-            avg_fill_price=e.avg_fill_price, rejection_reason=e.rejection_reason,
-            submitted_at=e.submitted_at, filled_at=e.filled_at,
+            status=e.status.value,
+            filled_volume=e.filled_volume,
+            avg_fill_price=e.avg_fill_price,
+            rejection_reason=e.rejection_reason,
+            submitted_at=e.submitted_at,
+            filled_at=e.filled_at,
         )
 
     # ── Reads ───────────────────────────────────────────────────────────────
@@ -75,8 +91,13 @@ class OrderRepository:
         return self.to_domain(m) if m else None
 
     async def list_by_org(
-        self, org_id: UUID, *, status: str | None = None, symbol: str | None = None,
-        limit: int = 100, offset: int = 0,
+        self,
+        org_id: UUID,
+        *,
+        status: str | None = None,
+        symbol: str | None = None,
+        limit: int = 100,
+        offset: int = 0,
     ) -> list[Order]:
         stmt = select(OrderModel).where(OrderModel.org_id == org_id)
         if status:
@@ -87,7 +108,11 @@ class OrderRepository:
         return [self.to_domain(r) for r in (await self.db.execute(stmt)).scalars().all()]
 
     async def list_by_terminal(
-        self, terminal_id: UUID, *, status: str | None = None, limit: int = 100,
+        self,
+        terminal_id: UUID,
+        *,
+        status: str | None = None,
+        limit: int = 100,
     ) -> list[Order]:
         stmt = select(OrderModel).where(OrderModel.terminal_id == terminal_id)
         if status:
@@ -96,9 +121,14 @@ class OrderRepository:
         return [self.to_domain(r) for r in (await self.db.execute(stmt)).scalars().all()]
 
     async def list_by_status(self, org_id: UUID, status: str) -> list[Order]:
-        stmt = select(OrderModel).where(
-            OrderModel.org_id == org_id, OrderModel.status == status,
-        ).order_by(OrderModel.created_at.desc())
+        stmt = (
+            select(OrderModel)
+            .where(
+                OrderModel.org_id == org_id,
+                OrderModel.status == status,
+            )
+            .order_by(OrderModel.created_at.desc())
+        )
         return [self.to_domain(r) for r in (await self.db.execute(stmt)).scalars().all()]
 
     async def add(self, entity: Order) -> Order:
@@ -122,9 +152,13 @@ class OrderRepository:
         return entity
 
     async def update_status(
-        self, id: UUID, status: str, *, rejection_reason: str | None = None,
+        self,
+        id: UUID,
+        status: str,
+        *,
+        rejection_reason: str | None = None,
     ) -> bool:
-        values: dict = {"status": status, "updated_at": datetime.now(timezone.utc)}
+        values: dict = {"status": status, "updated_at": datetime.now(UTC)}
         if rejection_reason is not None:
             values["rejection_reason"] = rejection_reason
         stmt = update(OrderModel).where(OrderModel.id == id).values(**values)
@@ -133,13 +167,20 @@ class OrderRepository:
         return (result.rowcount or 0) > 0
 
     async def update_fill(
-        self, id: UUID, *, filled_volume: float, avg_fill_price: float | None,
-        status: str, broker_order_id: str | None = None,
+        self,
+        id: UUID,
+        *,
+        filled_volume: float,
+        avg_fill_price: float | None,
+        status: str,
+        broker_order_id: str | None = None,
     ) -> bool:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         values: dict = {
-            "filled_volume": filled_volume, "avg_fill_price": avg_fill_price,
-            "status": status, "filled_at": now if status == "filled" else None,
+            "filled_volume": filled_volume,
+            "avg_fill_price": avg_fill_price,
+            "status": status,
+            "filled_at": now if status == "filled" else None,
             "updated_at": now,
         }
         if broker_order_id is not None:

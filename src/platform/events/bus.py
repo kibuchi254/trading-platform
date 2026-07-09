@@ -7,17 +7,18 @@ Two-tier model:
 For at-least-once delivery with retries, use Celery tasks as subscribers
 (see `infrastructure/celery_app.py` — `process_execution_report`, etc.).
 """
+
 from __future__ import annotations
 
 import asyncio
 import json
 from collections import defaultdict
-from typing import Any, Awaitable, Callable
-
-import redis.asyncio as aioredis
-
+from collections.abc import Awaitable, Callable
 from platform.core.config import get_settings
 from platform.core.logging import get_logger
+from typing import Any
+
+import redis.asyncio as aioredis
 
 _log = get_logger(__name__)
 Handler = Callable[[dict[str, Any]], Awaitable[None]]
@@ -56,7 +57,7 @@ class EventBus:
         for h in list(self._handlers.get(topic, [])):
             try:
                 await h(payload)
-            except Exception:  # noqa: BLE001
+            except Exception:
                 _log.exception("local_handler_error", topic=topic)
         # Then fan out to other processes via Redis
         if self._redis is not None and not self._local_only:
@@ -81,14 +82,14 @@ class EventBus:
                     data = json.loads(msg["data"])
                     topic = data["topic"]
                     payload = data["payload"]
-                except Exception:  # noqa: BLE001
+                except Exception:
                     _log.warning("bad_pubsub_message", raw=msg["data"][:200])
                     continue
                 # Cross-process messages get delivered to local subscribers too
                 for h in list(self._handlers.get(topic, [])):
                     try:
                         await h(payload)
-                    except Exception:  # noqa: BLE001
+                    except Exception:
                         _log.exception("cross_process_handler_error", topic=topic)
 
 

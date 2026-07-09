@@ -1,13 +1,18 @@
 """Async SQLAlchemy session factory + FastAPI dependency."""
+
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
-
 from platform.core.config import get_settings
 from platform.core.logging import get_logger
+
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 
 _log = get_logger(__name__)
 _engine: AsyncEngine | None = None

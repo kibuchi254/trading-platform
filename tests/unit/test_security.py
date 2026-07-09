@@ -1,14 +1,18 @@
 """Test security utilities — JWT, API key, password hashing."""
+
 from __future__ import annotations
 
 import uuid
+from platform.core.security import (
+    decode_token,
+    generate_api_key,
+    hash_password,
+    issue_token_pair,
+    verify_api_key,
+    verify_password,
+)
 
 import pytest
-
-from platform.core.security import (
-    decode_token, generate_api_key, hash_password, issue_token_pair,
-    verify_api_key, verify_password,
-)
 
 
 def test_password_hash_and_verify() -> None:
@@ -51,6 +55,7 @@ def test_jwt_refresh_token_has_correct_type() -> None:
 
 def test_jwt_invalid_token_raises() -> None:
     import jwt
+
     with pytest.raises(jwt.PyJWTError):
         decode_token("invalid.token.here")
 

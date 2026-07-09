@@ -3,15 +3,15 @@
 Sends messages, photos, and chart screenshots through the Telegram Bot API.
 Configuration is sourced from ``Settings.telegram_bot_token`` (SecretStr).
 """
+
 from __future__ import annotations
-
-from typing import Any
-
-import httpx
 
 from platform.core.config import get_settings
 from platform.core.logging import get_logger
 from platform.notifications.base import NotificationChannel
+from typing import Any
+
+import httpx
 
 _log = get_logger(__name__)
 
@@ -118,7 +118,7 @@ class TelegramChannel(NotificationChannel):
         try:
             async with httpx.AsyncClient(timeout=self._timeout) as client:
                 resp = await client.post(url, json=payload)
-        except Exception:  # noqa: BLE001
+        except Exception:
             _log.exception("telegram_photo_error", chat_id=chat_id)
             return False
 
@@ -154,7 +154,7 @@ class TelegramChannel(NotificationChannel):
                 payload["parse_mode"] = parse_mode
             try:
                 resp = await client.post(url, json=payload)
-            except Exception:  # noqa: BLE001
+            except Exception:
                 _log.exception("telegram_send_error", chat_id=chat_id)
                 return False
 

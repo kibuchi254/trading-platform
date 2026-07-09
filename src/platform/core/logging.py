@@ -1,14 +1,14 @@
 """Structured JSON logging via structlog, with correlation IDs and redaction."""
+
 from __future__ import annotations
 
 import logging
 import sys
+from platform.core.config import get_settings
 from typing import Any
 
 import structlog
 from structlog.types import EventDict, Processor
-
-from platform.core.config import get_settings
 
 
 def _add_app_context(_logger: Any, _method: str, event_dict: EventDict) -> EventDict:

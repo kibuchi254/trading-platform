@@ -13,12 +13,10 @@ The `Repositories` dataclass holds a single instance of every repository,
 all sharing the same `AsyncSession` — so a single unit-of-work commit flushes
 every aggregate written through it.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
-
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from platform.infrastructure.repositories.account_repository import AccountRepository
 from platform.infrastructure.repositories.ai_result_repository import AIResultRepository
 from platform.infrastructure.repositories.api_key_repository import APIKeyRepository
@@ -34,10 +32,13 @@ from platform.infrastructure.repositories.terminal_repository import TerminalRep
 from platform.infrastructure.repositories.trade_repository import TradeRepository
 from platform.infrastructure.repositories.user_repository import UserRepository
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 
 @dataclass(slots=True)
 class Repositories:
     """A bundle of every repository, all bound to one AsyncSession."""
+
     session: AsyncSession
     accounts: AccountRepository
     ai_results: AIResultRepository
@@ -81,10 +82,20 @@ def get_repositories(session: AsyncSession) -> Repositories:
 
 
 __all__ = [
-    "Repositories", "get_repositories",
-    "AccountRepository", "AIResultRepository", "APIKeyRepository",
-    "AuditRepository", "BacktestRepository", "MarketDataRepository",
-    "OrderRepository", "PositionRepository", "RiskEventRepository",
-    "SignalRepository", "StrategyRepository", "TerminalRepository",
-    "TradeRepository", "UserRepository",
+    "AIResultRepository",
+    "APIKeyRepository",
+    "AccountRepository",
+    "AuditRepository",
+    "BacktestRepository",
+    "MarketDataRepository",
+    "OrderRepository",
+    "PositionRepository",
+    "Repositories",
+    "RiskEventRepository",
+    "SignalRepository",
+    "StrategyRepository",
+    "TerminalRepository",
+    "TradeRepository",
+    "UserRepository",
+    "get_repositories",
 ]

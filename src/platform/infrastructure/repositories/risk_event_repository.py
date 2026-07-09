@@ -5,18 +5,21 @@ aggregate. RiskEvents are append-mostly: created on breach, escalated upward
 in severity, then resolved with operator notes. `resolve` is exposed as a
 convenience shortcut for the resolution endpoint.
 """
+
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from uuid import UUID
-
-from sqlalchemy import select, update
-from sqlalchemy.ext.asyncio import AsyncSession
-
+from datetime import UTC, datetime
 from platform.db.models import RiskEvent as RiskEventModel
 from platform.domain.risk import (
-    RiskAction, RiskEvent, RiskRuleName, RiskSeverity,
+    RiskAction,
+    RiskEvent,
+    RiskRuleName,
+    RiskSeverity,
 )
+from uuid import UUID
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 class RiskEventRepository:
@@ -76,7 +79,11 @@ class RiskEventRepository:
         return self.to_domain(m) if m else None
 
     async def list_by_org(
-        self, org_id: UUID, *, unresolved_only: bool = False, limit: int = 200,
+        self,
+        org_id: UUID,
+        *,
+        unresolved_only: bool = False,
+        limit: int = 200,
     ) -> list[RiskEvent]:
         stmt = select(RiskEventModel).where(RiskEventModel.org_id == org_id)
         if unresolved_only:
@@ -86,7 +93,11 @@ class RiskEventRepository:
         return [self.to_domain(r) for r in rows]
 
     async def list_by_rule(
-        self, org_id: UUID, rule: str, *, limit: int = 100,
+        self,
+        org_id: UUID,
+        rule: str,
+        *,
+        limit: int = 100,
     ) -> list[RiskEvent]:
         stmt = (
             select(RiskEventModel)
@@ -111,6 +122,7 @@ class RiskEventRepository:
         """Stamp resolution notes + timestamp into the JSONB details blob."""
         if not notes.strip():
             from platform.core.exceptions import DomainError
+
             raise DomainError("resolution notes required")
         m = await self.db.get(RiskEventModel, id)
         if m is None:
@@ -119,7 +131,7 @@ class RiskEventRepository:
         if details.get("resolved_at"):
             return False  # already resolved
         details["resolution"] = notes.strip()
-        details["resolved_at"] = datetime.now(timezone.utc).isoformat()
+        details["resolved_at"] = datetime.now(UTC).isoformat()
         m.details = details
         await self.db.flush()
         return True

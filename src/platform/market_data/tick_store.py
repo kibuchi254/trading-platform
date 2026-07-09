@@ -17,28 +17,28 @@ Typical use::
     ...
     await store.stop()        # flushes remaining buffer + cancels flusher
 """
+
 from __future__ import annotations
 
 import asyncio
 from collections import deque
-from datetime import datetime, timezone
-from typing import Any
-from uuid import UUID
-
-from sqlalchemy import insert
-
+from datetime import UTC, datetime
 from platform.core.logging import get_logger
 from platform.db.models import Tick
 from platform.db.session import get_engine
 from platform.events.bus import get_event_bus
 from platform.events.topics import Topic
+from typing import Any
+from uuid import UUID
+
+from sqlalchemy import insert
 
 _log = get_logger(__name__)
 
 # ── Tunables ─────────────────────────────────────────────────────────────────
-BATCH_SIZE: int = 1_000          # max ticks per flush
+BATCH_SIZE: int = 1_000  # max ticks per flush
 FLUSH_INTERVAL_SEC: float = 5.0  # max seconds between flushes
-MAX_BUFFERED: int = 100_000      # backpressure threshold
+MAX_BUFFERED: int = 100_000  # backpressure threshold
 
 
 class TickStore:
@@ -78,7 +78,7 @@ class TickStore:
         bus = get_event_bus()
         bus.subscribe(Topic.TICKS, self._on_tick)
         self._stop_event.clear()
-        self._started_at = datetime.now(timezone.utc)
+        self._started_at = datetime.now(UTC)
         self._flusher = asyncio.create_task(self._flush_loop(), name="tick_store_flusher")
         _log.info(
             "tick_store_started",
@@ -99,7 +99,7 @@ class TickStore:
         self._flush_event.set()
         try:
             await asyncio.wait_for(self._flusher, timeout=30.0)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             _log.warning("tick_store_flusher_timeout_on_stop")
             self._flusher.cancel()
         except asyncio.CancelledError:
@@ -175,14 +175,12 @@ class TickStore:
         while not self._stop_event.is_set():
             self._flush_event.clear()
             try:
-                await asyncio.wait_for(
-                    self._flush_event.wait(), timeout=FLUSH_INTERVAL_SEC
-                )
-            except asyncio.TimeoutError:
+                await asyncio.wait_for(self._flush_event.wait(), timeout=FLUSH_INTERVAL_SEC)
+            except TimeoutError:
                 pass  # periodic flush
             try:
                 await self._flush_batch()
-            except Exception:  # noqa: BLE001
+            except Exception:
                 _log.exception("tick_store_flush_failed")
                 # Back off briefly to avoid a tight error loop hammering Postgres.
                 await asyncio.sleep(1.0)
@@ -190,7 +188,7 @@ class TickStore:
         # Final drain on shutdown.
         try:
             await self._flush_batch()
-        except Exception:  # noqa: BLE001
+        except Exception:
             _log.exception("tick_store_final_flush_failed")
 
     async def flush_now(self) -> int:
@@ -216,7 +214,7 @@ class TickStore:
             total += written
             self._total_written += written
             self._total_flushes += 1
-            self._last_flush_at = datetime.now(timezone.utc)
+            self._last_flush_at = datetime.now(UTC)
             _log.debug(
                 "tick_store_flush",
                 rows=written,
@@ -238,9 +236,7 @@ class TickStore:
             return 0
         engine = get_engine()
         stmt = (
-            insert(Tick.__table__)
-            .values(rows)
-            .on_conflict_do_nothing()  # type: ignore[attr-defined]
+            insert(Tick.__table__).values(rows).on_conflict_do_nothing()  # type: ignore[attr-defined]
         )
         async with engine.begin() as conn:
             result = await conn.execute(stmt)
@@ -259,11 +255,8 @@ class TickStore:
             - ``write_rate`` — rolling avg rows/sec since ``started_at``.
             - ``last_flush_at`` — ISO timestamp of the most recent flush.
         """
-        now = datetime.now(timezone.utc)
-        elapsed = (
-            (now - self._started_at).total_seconds()
-            if self._started_at is not None else 0.0
-        )
+        now = datetime.now(UTC)
+        elapsed = (now - self._started_at).total_seconds() if self._started_at is not None else 0.0
         write_rate = self._total_written / elapsed if elapsed > 0 else 0.0
         return {
             "buffered_count": len(self._buffer),

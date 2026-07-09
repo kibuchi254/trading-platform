@@ -12,21 +12,22 @@ This is the runtime "go live" path: the strategy has already been registered
 binds it to a specific terminal and asks the bridge to start streaming the
 relevant OHLC bars.
 """
+
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from uuid import UUID
-
-from pydantic import BaseModel
-from sqlalchemy import select
-
+from datetime import UTC, datetime
 from platform.core.exceptions import NotFoundError, ValidationError
 from platform.core.logging import get_logger
-from platform.db.models import Strategy as StrategyModel, Terminal
+from platform.db.models import Strategy as StrategyModel
+from platform.db.models import Terminal
 from platform.db.session import db_context
 from platform.events.bus import get_event_bus
 from platform.events.topics import Topic
 from platform.infrastructure.mt5_bridge.client import get_bridge_client
+from uuid import UUID
+
+from pydantic import BaseModel
+from sqlalchemy import select
 
 _log = get_logger(__name__)
 
@@ -86,10 +87,10 @@ async def handle_activate_strategy(cmd: ActivateStrategyCommand) -> ActivateStra
             "terminal_id": cmd.terminal_id,
             "symbols": cmd.symbols,
             "timeframes": cmd.timeframes,
-            "activated_at": datetime.now(timezone.utc).isoformat(),
+            "activated_at": datetime.now(UTC).isoformat(),
         }
         strategy.config = config
-        strategy.updated_at = datetime.now(timezone.utc)
+        strategy.updated_at = datetime.now(UTC)
         await db.commit()
 
     # Subscribe the terminal to ticks for each strategy symbol — the
@@ -97,10 +98,8 @@ async def handle_activate_strategy(cmd: ActivateStrategyCommand) -> ActivateStra
     # which the strategy runner subscribes to.
     bridge = get_bridge_client()
     try:
-        await bridge.subscribe_ticks(
-            terminal_id=cmd.terminal_id, symbols=cmd.symbols, timeout=5.0
-        )
-    except Exception as e:  # noqa: BLE001 — subscription failure is non-fatal
+        await bridge.subscribe_ticks(terminal_id=cmd.terminal_id, symbols=cmd.symbols, timeout=5.0)
+    except Exception as e:
         _log.warning(
             "activate_strategy_subscribe_failed",
             strategy_id=str(cmd.strategy_id),
@@ -108,7 +107,7 @@ async def handle_activate_strategy(cmd: ActivateStrategyCommand) -> ActivateStra
             error=str(e),
         )
 
-    now_iso = datetime.now(timezone.utc).isoformat()
+    now_iso = datetime.now(UTC).isoformat()
     await get_event_bus().publish(
         Topic.SIGNALS,
         {

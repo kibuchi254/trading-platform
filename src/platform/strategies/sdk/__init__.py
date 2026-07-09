@@ -4,6 +4,7 @@ A strategy is a pure function: (market_data, context) -> Signal | None.
 It has no DB access, no HTTP, no side effects. The orchestrator invokes it
 on every new bar/tick and feeds signals to the application layer.
 """
+
 from __future__ import annotations
 
 import abc
@@ -17,6 +18,7 @@ from pydantic import BaseModel
 
 class Signal(BaseModel):
     """A trading signal — what the strategy wants to do."""
+
     symbol: str
     side: str  # buy | sell
     strength: float = 0.0  # 0.0 - 1.0
@@ -50,6 +52,7 @@ class Tick(BaseModel):
 @dataclass
 class StrategyContext:
     """Per-strategy runtime state + services the SDK can call."""
+
     org_id: UUID
     terminal_id: str
     strategy_id: UUID
@@ -59,6 +62,7 @@ class StrategyContext:
 
 class Strategy(abc.ABC):
     """Base class. Subclass and implement `on_bar` and/or `on_tick`."""
+
     name: str = "abstract"
     version: str = "1.0.0"
     default_config: dict[str, Any] = {}
