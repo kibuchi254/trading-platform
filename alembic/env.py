@@ -12,8 +12,11 @@ from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
-# Make `platform` importable
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
+# Make `platform` importable without shadowing standard library platform module
+import platform
+platform_path = Path(__file__).resolve().parent.parent / "src" / "platform"
+if not hasattr(platform, "__path__"):
+    platform.__path__ = [str(platform_path)]
 
 from platform.core.config import get_settings  # noqa: E402
 from platform.db.base import Base  # noqa: E402

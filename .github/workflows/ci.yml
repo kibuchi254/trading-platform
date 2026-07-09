@@ -94,7 +94,6 @@ jobs:
         run: uv run alembic upgrade head
         env:
           DATABASE_URL: postgresql+asyncpg://atlas:atlas@localhost:5432/atlas_test
-          PYTHONPATH: src
 
       - name: Run unit tests
         run: uv run pytest tests/unit -v --cov=platform --cov-report=xml --cov-report=term-missing
@@ -149,7 +148,6 @@ jobs:
         run: uv run alembic upgrade head
         env:
           DATABASE_URL: postgresql+asyncpg://atlas:atlas@localhost:5432/atlas_test
-          PYTHONPATH: src
 
       - name: Run integration tests
         run: uv run pytest tests/integration -v
