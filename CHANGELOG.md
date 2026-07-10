@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.0.14 (2026-07-10)
+
+### Bug Fixes
+
+- **deploy**: Stable project name, remove-orphans, fix worker healthcheck
+  ([`949e484`](https://github.com/kibuchi254/trading-platform/commit/949e48419742c6fa9c7d88cb06e7852a63f6cfe3))
+
+
 ## v1.0.13 (2026-07-10)
 
 ### Bug Fixes
