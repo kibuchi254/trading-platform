@@ -52,15 +52,28 @@ services:
         max-size: "20m"
         max-file: "3"
 
-  redis:
     image: redis:7-alpine
     restart: unless-stopped
+    # --requirepass is only added when REDIS_PASSWORD is set.
+    # Passing --requirepass with an empty string is invalid in Redis 7
+    # and causes a crash-loop (exit code 1).
     command: >
-      redis-server
-      --maxmemory 512mb
-      --maxmemory-policy allkeys-lru
-      --save ""
-      --requirepass ${REDIS_PASSWORD:-}
+      sh -c "
+        if [ -n '$$REDIS_PASSWORD' ]; then
+          exec redis-server
+            --maxmemory 512mb
+            --maxmemory-policy allkeys-lru
+            --save ''
+            --requirepass $$REDIS_PASSWORD;
+        else
+          exec redis-server
+            --maxmemory 512mb
+            --maxmemory-policy allkeys-lru
+            --save '';
+        fi
+      "
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
     volumes:
       - redis_data:/data
     expose:
