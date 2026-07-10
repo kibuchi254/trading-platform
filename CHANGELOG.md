@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.0.8 (2026-07-10)
+
+### Bug Fixes
+
+- Resolve Redis DNS failure and Prometheus port collision on startup
+  ([`aeb62f3`](https://github.com/kibuchi254/trading-platform/commit/aeb62f39ebe2beb0ed13ac6e517c91778cf9083c))
+
+
 ## v1.0.7 (2026-07-09)
 
 ### Bug Fixes
