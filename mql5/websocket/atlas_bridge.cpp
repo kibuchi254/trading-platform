@@ -17,13 +17,17 @@
 #include <string>
 #include <vector>
 #include <map>
-#include <mutex>
 #include <sstream>
 
 #pragma comment(lib, "winhttp.lib")
 #pragma comment(lib, "ws2_32.lib")
 
 #define DLLEXPORT extern "C" __declspec(dllexport)
+
+// Manually define options if missing in older WinHTTP header definitions
+#ifndef WINHTTP_OPTION_UPGRADE_TO_WEBSOCKET
+#define WINHTTP_OPTION_UPGRADE_TO_WEBSOCKET 114
+#endif
 
 struct WsSession {
     HINTERNET hSession = NULL;
@@ -35,15 +39,20 @@ struct WsSession {
 };
 
 static std::map<int, WsSession*> g_sessions;
-static std::mutex g_mutex;
+static CRITICAL_SECTION g_cs;
 static int g_nextHandle = 1;
+
+// Thread safety wrapper using standard Windows Critical Sections
+struct WsLock {
+    WsLock() { EnterCriticalSection(&g_cs); }
+    ~WsLock() { LeaveCriticalSection(&g_cs); }
+};
 
 // Helper to parse ws:// or wss:// URLs
 bool ParseUrl(const std::wstring& url, std::wstring& host, int& port, std::wstring& path, bool& isSecure) {
     URL_COMPONENTS urlComp = { 0 };
     urlComp.dwStructSize = sizeof(urlComp);
     
-    // Allocate buffer for host and path
     std::vector<wchar_t> hostBuf(url.length() + 1);
     std::vector<wchar_t> pathBuf(url.length() + 1);
     
@@ -52,7 +61,6 @@ bool ParseUrl(const std::wstring& url, std::wstring& host, int& port, std::wstri
     urlComp.lpszUrlPath = pathBuf.data();
     urlComp.dwUrlPathLength = (DWORD)pathBuf.size();
     
-    // Convert ws:// to http:// and wss:// to https:// because WinHttpCrackUrl expects HTTP schemes
     std::wstring parsedUrl = url;
     if (url.rfind(L"ws://", 0) == 0) {
         parsedUrl = L"http://" + url.substr(5);
@@ -94,7 +102,6 @@ DLLEXPORT int ws_connect(const wchar_t* url_str) {
 
     WsSession* session = new WsSession();
 
-    // 1. Open WinHttp session
     session->hSession = WinHttpOpen(L"ATLAS MT5 Bridge Client/1.0",
                                    WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
                                    WINHTTP_NO_PROXY_NAME,
@@ -104,7 +111,6 @@ DLLEXPORT int ws_connect(const wchar_t* url_str) {
         return -3;
     }
 
-    // 2. Connect to Host
     session->hConnect = WinHttpConnect(session->hSession, host.c_str(), (INTERNET_PORT)port, 0);
     if (!session->hConnect) {
         WinHttpCloseHandle(session->hSession);
@@ -112,7 +118,6 @@ DLLEXPORT int ws_connect(const wchar_t* url_str) {
         return -4;
     }
 
-    // 3. Open HTTP Request
     DWORD flags = isSecure ? WINHTTP_FLAG_SECURE : 0;
     session->hRequest = WinHttpOpenRequest(session->hConnect, L"GET", path.c_str(),
                                           NULL, WINHTTP_NO_REFERER,
@@ -124,7 +129,6 @@ DLLEXPORT int ws_connect(const wchar_t* url_str) {
         return -5;
     }
 
-    // 4. Request WebSocket Upgrade
     if (!WinHttpSetOption(session->hRequest, WINHTTP_OPTION_UPGRADE_TO_WEBSOCKET, NULL, 0)) {
         WinHttpCloseHandle(session->hRequest);
         WinHttpCloseHandle(session->hConnect);
@@ -133,7 +137,6 @@ DLLEXPORT int ws_connect(const wchar_t* url_str) {
         return -6;
     }
 
-    // 5. Send Request
     if (!WinHttpSendRequest(session->hRequest, WINHTTP_NO_ADDITIONAL_HEADERS, 0,
                             WINHTTP_NO_REQUEST_DATA, 0, 0, 0)) {
         WinHttpCloseHandle(session->hRequest);
@@ -143,7 +146,6 @@ DLLEXPORT int ws_connect(const wchar_t* url_str) {
         return -7;
     }
 
-    // 6. Receive Response
     if (!WinHttpReceiveResponse(session->hRequest, NULL)) {
         WinHttpCloseHandle(session->hRequest);
         WinHttpCloseHandle(session->hConnect);
@@ -152,8 +154,7 @@ DLLEXPORT int ws_connect(const wchar_t* url_str) {
         return -8;
     }
 
-    // 7. Complete WebSocket Upgrade
-    session->hWebSocket = WinHttpWebSocketCompleteUpgrade(session->hRequest, NULL);
+    session->hWebSocket = WinHttpWebSocketCompleteUpgrade(session->hRequest, (DWORD_PTR)0);
     if (!session->hWebSocket) {
         WinHttpCloseHandle(session->hRequest);
         WinHttpCloseHandle(session->hConnect);
@@ -162,26 +163,33 @@ DLLEXPORT int ws_connect(const wchar_t* url_str) {
         return -9;
     }
 
-    // We no longer need the request handle after upgrading
     WinHttpCloseHandle(session->hRequest);
     session->hRequest = NULL;
-
     session->isOpen = true;
 
-    // Save session in registry
-    std::lock_guard<std::mutex> lock(g_mutex);
-    int handle = g_nextHandle++;
-    g_sessions[handle] = session;
+    int handle = 0;
+    {
+        WsLock lock;
+        handle = g_nextHandle++;
+        g_sessions[handle] = session;
+    }
 
     return handle;
 }
 
 // Close WebSocket connection
 DLLEXPORT void ws_close(int handle) {
-    std::lock_guard<std::mutex> lock(g_mutex);
-    auto it = g_sessions.find(handle);
-    if (it != g_sessions.end()) {
-        WsSession* session = it->second;
+    WsSession* session = NULL;
+    {
+        WsLock lock;
+        auto it = g_sessions.find(handle);
+        if (it != g_sessions.end()) {
+            session = it->second;
+            g_sessions.erase(it);
+        }
+    }
+
+    if (session) {
         if (session->hWebSocket) {
             if (session->isOpen) {
                 WinHttpWebSocketClose(session->hWebSocket, WINHTTP_WEB_SOCKET_SUCCESS_CLOSE_STATUS, NULL, 0);
@@ -191,7 +199,6 @@ DLLEXPORT void ws_close(int handle) {
         if (session->hConnect) WinHttpCloseHandle(session->hConnect);
         if (session->hSession) WinHttpCloseHandle(session->hSession);
         delete session;
-        g_sessions.erase(it);
     }
 }
 
@@ -201,7 +208,7 @@ DLLEXPORT int ws_send(int handle, const wchar_t* msg_str) {
 
     WsSession* session = NULL;
     {
-        std::lock_guard<std::mutex> lock(g_mutex);
+        WsLock lock;
         auto it = g_sessions.find(handle);
         if (it != g_sessions.end()) {
             session = it->second;
@@ -211,14 +218,12 @@ DLLEXPORT int ws_send(int handle, const wchar_t* msg_str) {
     if (!session || !session->isOpen) return -2;
 
     std::wstring msg(msg_str);
-    // Convert wide string to UTF-8
     int utf8_len = WideCharToMultiByte(CP_UTF8, 0, msg.c_str(), -1, NULL, 0, NULL, NULL);
     if (utf8_len <= 0) return -3;
 
     std::vector<char> utf8_buf(utf8_len);
     WideCharToMultiByte(CP_UTF8, 0, msg.c_str(), -1, utf8_buf.data(), utf8_len, NULL, NULL);
 
-    // Send the UTF-8 payload (excluding null terminator)
     DWORD dwError = WinHttpWebSocketSend(session->hWebSocket, 
                                          WINHTTP_WEB_SOCKET_UTF8_MESSAGE_BUFFER_TYPE, 
                                          (PVOID)utf8_buf.data(), 
@@ -228,12 +233,12 @@ DLLEXPORT int ws_send(int handle, const wchar_t* msg_str) {
         return -4;
     }
 
-    return 1; // Success
+    return 1;
 }
 
 // Check if WebSocket is open
 DLLEXPORT bool ws_is_open(int handle) {
-    std::lock_guard<std::mutex> lock(g_mutex);
+    WsLock lock;
     auto it = g_sessions.find(handle);
     if (it != g_sessions.end()) {
         return it->second->isOpen;
@@ -242,13 +247,10 @@ DLLEXPORT bool ws_is_open(int handle) {
 }
 
 // Receive message with timeout
-// Returns const wchar_t* because MQL5 maps this directly to MQL5 string.
-// The MQL5 environment copies returned strings immediately, so returning a pointer
-// to a session-owned persistent buffer is thread-safe and memory-safe.
 DLLEXPORT const wchar_t* ws_recv(int handle, int timeout_ms) {
     WsSession* session = NULL;
     {
-        std::lock_guard<std::mutex> lock(g_mutex);
+        WsLock lock;
         auto it = g_sessions.find(handle);
         if (it != g_sessions.end()) {
             session = it->second;
@@ -257,7 +259,6 @@ DLLEXPORT const wchar_t* ws_recv(int handle, int timeout_ms) {
 
     if (!session || !session->isOpen) return L"";
 
-    // Set read timeout
     DWORD dwTimeout = (DWORD)timeout_ms;
     WinHttpSetOption(session->hWebSocket, WINHTTP_OPTION_RECEIVE_TIMEOUT, &dwTimeout, sizeof(dwTimeout));
 
@@ -279,7 +280,7 @@ DLLEXPORT const wchar_t* ws_recv(int handle, int timeout_ms) {
             if (dwError != ERROR_TIMEOUT) {
                 session->isOpen = false;
             }
-            return L""; // Timeout or connection error
+            return L"";
         }
 
         if (bytesRead > 0) {
@@ -296,8 +297,7 @@ DLLEXPORT const wchar_t* ws_recv(int handle, int timeout_ms) {
         return L"";
     }
 
-    // Convert UTF-8 back to WideChar (wstring)
-    buffer.push_back('\0'); // Ensure null terminator for conversion
+    buffer.push_back('\0');
     int wlen = MultiByteToWideChar(CP_UTF8, 0, buffer.data(), -1, NULL, 0);
     if (wlen <= 0) return L"";
 
@@ -311,11 +311,12 @@ DLLEXPORT const wchar_t* ws_recv(int handle, int timeout_ms) {
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved) {
     switch (ul_reason_for_call) {
     case DLL_PROCESS_ATTACH:
+        InitializeCriticalSection(&g_cs);
         break;
     case DLL_PROCESS_DETACH:
         // Cleanup all sessions on unload
         {
-            std::lock_guard<std::mutex> lock(g_mutex);
+            WsLock lock;
             for (auto& pair : g_sessions) {
                 WsSession* session = pair.second;
                 if (session->hWebSocket) {
@@ -328,6 +329,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
             }
             g_sessions.clear();
         }
+        DeleteCriticalSection(&g_cs);
         break;
     }
     return TRUE;
