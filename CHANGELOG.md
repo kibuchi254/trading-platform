@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.0.10 (2026-07-10)
+
+### Bug Fixes
+
+- **redis**: Prevent crash-loop when REDIS_PASSWORD is empty
+  ([`1ba4886`](https://github.com/kibuchi254/trading-platform/commit/1ba48866039d66d7198bbe1820e6bbccd5e64432))
+
+
 ## v1.0.9 (2026-07-10)
 
 ### Bug Fixes
