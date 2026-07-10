@@ -54,7 +54,7 @@ class Settings(BaseSettings):
 
     # ── Telemetry ────────────────────────────────────────────────────────
     otel_exporter_otlp_endpoint: str | None = "http://localhost:4317"
-    prometheus_metrics_port: int = 9090
+    prometheus_metrics_port: int = 9101
 
     # ── Notifications ────────────────────────────────────────────────────
     smtp_host: str | None = None

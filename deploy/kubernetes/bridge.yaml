@@ -28,7 +28,7 @@ spec:
             - name: ws
               containerPort: 9000
             - name: metrics
-              containerPort: 9090
+              containerPort: 9101
           envFrom:
             - configMapRef:
                 name: atlas-config

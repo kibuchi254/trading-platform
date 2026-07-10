@@ -18,7 +18,7 @@ data:
   CELERY_BROKER_URL: "redis://atlas-redis:6379/1"
   CELERY_RESULT_BACKEND: "redis://atlas-redis:6379/2"
   LLM_PROVIDER: "none"
-  PROMETHEUS_METRICS_PORT: "9090"
+  PROMETHEUS_METRICS_PORT: "9101"
   CORS_ORIGINS: "https://app.atlas.example.com"
 ---
 apiVersion: v1

@@ -4,13 +4,13 @@ global:
 scrape_configs:
   - job_name: atlas_api
     static_configs:
-      - targets: ["api:9090"]
+      - targets: ["api:9101"]
   - job_name: atlas_bridge
     static_configs:
-      - targets: ["bridge:9090"]
+      - targets: ["bridge:9101"]
   - job_name: atlas_worker
     static_configs:
-      - targets: ["worker:9090"]
+      - targets: ["worker:9101"]
   - job_name: prometheus
     static_configs:
       - targets: ["localhost:9090"]
