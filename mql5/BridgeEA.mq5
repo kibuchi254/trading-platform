@@ -50,12 +50,35 @@ int    g_wsHandle    = -1;
 ulong  g_lastHeartbeat = 0;
 string g_symbols[];
 
+void PopulateSymbols()
+{
+   ArrayResize(g_symbols, 0);
+   string trimmed = InpSymbolsCSV;
+   StringTrimLeft(trimmed);
+   StringTrimRight(trimmed);
+
+   if(trimmed == "*" || trimmed == "all" || trimmed == "ALL" || trimmed == "")
+   {
+      int total = SymbolsTotal(true);
+      ArrayResize(g_symbols, total);
+      for(int i = 0; i < total; i++)
+      {
+         g_symbols[i] = SymbolName(i, true);
+      }
+      Print("[ATLAS] Streaming all ", total, " symbols from Market Watch.");
+   }
+   else
+   {
+      SplitCSV(InpSymbolsCSV, g_symbols);
+      Print("[ATLAS] Streaming ", ArraySize(g_symbols), " configured symbols.");
+   }
+}
+
 //+------------------------------------------------------------------+
 int OnInit()
 {
    trade.SetExpertMagicNumber(InpMagic);
-   ArrayResize(g_symbols, 0);
-   SplitCSV(InpSymbolsCSV, g_symbols);
+   PopulateSymbols();
 
    Print("[ATLAS] BridgeEA starting. terminal=", InpTerminalId, " broker=", InpBroker);
 
