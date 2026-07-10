@@ -38,7 +38,31 @@ class EventBus:
             self._local_only = True
             return
         self._redis = aioredis.from_url(settings.redis_url, decode_responses=True)
-        await self._redis.ping()
+
+        # Retry the initial ping — Redis may still be starting when we come up.
+        max_attempts = 5
+        for attempt in range(1, max_attempts + 1):
+            try:
+                await self._redis.ping()
+                break
+            except Exception as exc:
+                if attempt == max_attempts:
+                    _log.error(
+                        "event_bus_redis_unreachable",
+                        url=settings.redis_url,
+                        attempts=max_attempts,
+                        error=str(exc),
+                    )
+                    raise
+                wait = 2 ** attempt  # 2s, 4s, 8s, 16s
+                _log.warning(
+                    "event_bus_redis_retry",
+                    attempt=attempt,
+                    wait_seconds=wait,
+                    error=str(exc),
+                )
+                await asyncio.sleep(wait)
+
         self._pubsub_task = asyncio.create_task(self._pubsub_loop())
         _log.info("event_bus_connected", url=settings.redis_url)
 
