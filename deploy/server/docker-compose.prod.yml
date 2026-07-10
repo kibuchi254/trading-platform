@@ -125,9 +125,9 @@ services:
       --concurrency=4
       --max-tasks-per-child=1000
     healthcheck:
-      test: ["CMD", "celery", "-A", "platform.infrastructure.celery_app", "inspect", "ping", "-d", "celery@$$HOSTNAME"]
+      test: ["CMD-SHELL", "celery -A platform.infrastructure.celery_app inspect ping --timeout 5 2>&1 | grep -q pong"]
       interval: 30s
-      timeout: 10s
+      timeout: 15s
       retries: 3
       start_period: 30s
 
