@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v1.0.11 (2026-07-10)
+
+### Bug Fixes
+
+- **compose**: Restore missing redis service key dropped in previous edit
+  ([`9d7fdde`](https://github.com/kibuchi254/trading-platform/commit/9d7fdde1932b46ce5faae09599e37dc121648cad))
+
+### Code Style
+
+- Ruff format bus.py
+  ([`2bbc09f`](https://github.com/kibuchi254/trading-platform/commit/2bbc09fedca1cc98cc27ae537e122463435e021a))
+
+
 ## v1.0.10 (2026-07-10)
 
 ### Bug Fixes
