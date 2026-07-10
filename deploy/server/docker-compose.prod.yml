@@ -52,6 +52,7 @@ services:
         max-size: "20m"
         max-file: "3"
 
+  redis:
     image: redis:7-alpine
     restart: unless-stopped
     # --requirepass is only added when REDIS_PASSWORD is set.
