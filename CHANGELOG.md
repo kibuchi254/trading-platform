@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.0.9 (2026-07-10)
+
+### Bug Fixes
+
+- **bus**: Retry Redis ping on startup with exponential backoff
+  ([`5050d94`](https://github.com/kibuchi254/trading-platform/commit/5050d94c41ee97aa50d78644ce2ce6c725dc7198))
+
+
 ## v1.0.8 (2026-07-10)
 
 ### Bug Fixes
