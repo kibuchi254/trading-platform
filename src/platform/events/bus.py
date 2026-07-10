@@ -54,7 +54,7 @@ class EventBus:
                         error=str(exc),
                     )
                     raise
-                wait = 2 ** attempt  # 2s, 4s, 8s, 16s
+                wait = 2**attempt  # 2s, 4s, 8s, 16s
                 _log.warning(
                     "event_bus_redis_retry",
                     attempt=attempt,
