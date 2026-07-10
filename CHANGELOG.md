@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v1.0.13 (2026-07-10)
+
+### Bug Fixes
+
+- Re-encode .gitignore as UTF-8 (was UTF-16, broke hatchling build)
+  ([`3bf007f`](https://github.com/kibuchi254/trading-platform/commit/3bf007f1acad58d6073a61398b157c731185e03f))
+
+### Chores
+
+- Ignore __pycache__ and compiled Python files
+  ([`73dd286`](https://github.com/kibuchi254/trading-platform/commit/73dd286f7ea7fa8ca5d206cc5c8f8073a121ca37))
+
+
 ## v1.0.12 (2026-07-10)
 
 ### Bug Fixes
