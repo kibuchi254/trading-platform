@@ -123,6 +123,15 @@ jobs:
               fi
             done
 
+            echo "▶ Ensuring infrastructure services are up (postgres, redis)..."
+            docker compose \
+              --env-file "${{ env.DEPLOY_DIR }}/.env" \
+              -f "${{ env.DEPLOY_DIR }}/deploy/server/docker-compose.prod.yml" \
+              up -d postgres redis
+
+            echo "▶ Waiting 10s for infrastructure to be ready..."
+            sleep 10
+
             echo "▶ Rolling update — api first..."
             docker compose \
               --env-file "${{ env.DEPLOY_DIR }}/.env" \

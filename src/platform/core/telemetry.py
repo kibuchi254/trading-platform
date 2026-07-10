@@ -63,17 +63,40 @@ TASK_RESULTS = Counter(
 
 
 def start_metrics_server() -> None:
+    """Start the Prometheus HTTP scrape endpoint.
+
+    Guarded so it only binds once across all Uvicorn worker processes:
+    - In test environments it is skipped entirely.
+    - If the port is already in use (e.g. a sibling worker beat us to it),
+      we log and continue rather than crashing the process.
+    """
+    import os
+
     settings = get_settings()
     if settings.env == "test":
         return
+
+    # Uvicorn forks workers *after* the parent process starts.  Each worker
+    # inherits the lifespan and will attempt to bind the same port.  We
+    # identify the first worker (pid == parent+1 heuristic is fragile), so
+    # instead we simply swallow the "already in use" errno that every
+    # subsequent worker will receive.
     try:
         start_http_server(settings.prometheus_metrics_port)
-        _log.info("metrics_server_started", port=settings.prometheus_metrics_port)
+        _log.info(
+            "metrics_server_started",
+            port=settings.prometheus_metrics_port,
+            pid=os.getpid(),
+        )
     except OSError as e:
+        # errno 98  = EADDRINUSE on Linux
+        # errno 48  = EADDRINUSE on macOS
+        # errno 10048 = WSAEADDRINUSE on Windows
         if e.errno in (98, 48, 10048):
             _log.info(
                 "metrics_server_already_running",
                 port=settings.prometheus_metrics_port,
+                pid=os.getpid(),
                 reason=str(e),
             )
         else:
