@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.1.0 (2026-07-10)
+
+### Features
+
+- **mql5**: Add native C++ WinHTTP websocket DLL source and README
+  ([`17103d3`](https://github.com/kibuchi254/trading-platform/commit/17103d3e3e1bb8d56cb832da222b3e115a1ce592))
+
+
 ## v1.0.14 (2026-07-10)
 
 ### Bug Fixes
