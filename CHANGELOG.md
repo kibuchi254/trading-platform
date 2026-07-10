@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.0.12 (2026-07-10)
+
+### Bug Fixes
+
+- Change app metrics port from 9090 to 9101
+  ([`c7b268f`](https://github.com/kibuchi254/trading-platform/commit/c7b268fece7e1e13787931e86c0f4956b7e1c787))
+
+
 ## v1.0.11 (2026-07-10)
 
 ### Bug Fixes
