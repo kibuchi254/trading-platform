@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v1.5.2 (2026-08-03)
+
+### Bug Fixes
+
+- **api**: Require auth on GET /strategies/available
+  ([`a11ee0d`](https://github.com/kibuchi254/trading-platform/commit/a11ee0d2c4df07591654cc63fe18f78b4e8e63fa))
+
+### Testing
+
+- Add HTTP smoke tests for all console REST routes
+  ([`ee5ae94`](https://github.com/kibuchi254/trading-platform/commit/ee5ae944b0336156ce9a57299f668cb044718ca2))
+
+
 ## v1.5.1 (2026-08-03)
 
 ### Bug Fixes
