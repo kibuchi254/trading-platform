@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.4.2 (2026-08-03)
+
+### Bug Fixes
+
+- **auth**: Fix API_URL fallback in BFF routes from ?? to ||
+  ([`c7a8a4b`](https://github.com/kibuchi254/trading-platform/commit/c7a8a4b102d04b0c2434e732c8555610aff979b0))
+
+
 ## v1.4.1 (2026-08-03)
 
 ### Bug Fixes
