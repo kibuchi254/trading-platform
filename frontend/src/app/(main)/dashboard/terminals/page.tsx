@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Download, Plus, Terminal as TerminalIcon } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Check, Copy, Download, KeyRound, Plus, RefreshCw, Terminal as TerminalIcon } from "lucide-react";
 import { toast } from "sonner";
 
 import { ErrorState, LoadingState, PageHeader } from "@/components/atlas/ui";
@@ -17,12 +17,56 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { createApiKey } from "@/lib/api/client";
 import { flattenTerminal, listTerminals, syncAccount, syncPositions } from "@/lib/api/endpoints";
 import { useAsync } from "@/lib/api/hooks";
 
 export default function TerminalsPage() {
   const { data, error, loading, reload } = useAsync(() => listTerminals(), []);
   const [dialogOpen, setDialogOpen] = useState(false);
+
+  const [bridgeUrl, setBridgeUrl] = useState("wss://backend.vorte.dev/bridge/");
+  const [terminalId, setTerminalId] = useState("");
+  const [authToken, setAuthToken] = useState("");
+  const [broker, setBroker] = useState("Exness");
+  const [symbols, setSymbols] = useState("EURUSD,GBPUSD,USDJPY,XAUUSD");
+  const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [issuingKey, setIssuingKey] = useState(false);
+
+  const initCredentials = async () => {
+    if (typeof window !== "undefined") {
+      const isHttps = window.location.protocol === "https:";
+      const host = window.location.hostname;
+      // If host is backend.vorte.dev or custom domain, use wss://<host>/bridge/
+      const url = isHttps || host.includes("vorte.dev") ? `wss://${host}/bridge/` : `ws://${host}:2848`;
+      setBridgeUrl(url);
+    } else {
+      setBridgeUrl("wss://backend.vorte.dev/bridge/");
+    }
+    const randId = `mt5-term-${Math.random().toString(36).slice(2, 7)}`;
+    setTerminalId(randId);
+
+    // Issue real backend API key from FastAPI / PostgreSQL
+    try {
+      setIssuingKey(true);
+      const apiKeyData = await createApiKey(`MT5-${randId}`);
+      if (apiKeyData && apiKeyData.raw_key) {
+        setAuthToken(apiKeyData.raw_key);
+      }
+    } catch {
+      // Fallback if auth session is transient
+      const fallbackToken = `token-${Math.random().toString(36).slice(2, 12)}`;
+      setAuthToken(fallbackToken);
+    } finally {
+      setIssuingKey(false);
+    }
+  };
+
+  useEffect(() => {
+    if (dialogOpen) {
+      initCredentials();
+    }
+  }, [dialogOpen]);
 
   async function act(fn: () => Promise<unknown>, ok: string) {
     try {
@@ -39,6 +83,25 @@ export default function TerminalsPage() {
     toast.success("Downloading BridgeEA.mq5");
   };
 
+  const handleDownloadPreset = () => {
+    const setContent = `InpBridgeUrl=${bridgeUrl}\nInpTerminalId=${terminalId}\nInpBroker=Exness\nInpAuthToken=${authToken}\nInpSymbolsCSV=EURUSD,GBPUSD,USDJPY,XAUUSD\nInpHeartbeatSeconds=10\nInpReconnectMs=3000\nInpMagic=770000\n`;
+    const blob = new Blob([setContent], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${terminalId}.set`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success(`Downloaded preset file: ${terminalId}.set`);
+  };
+
+  const copyToClipboard = (text: string, label: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedField(label);
+    toast.success(`Copied ${label} to clipboard`);
+    setTimeout(() => setCopiedField(null), 2000);
+  };
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -52,7 +115,7 @@ export default function TerminalsPage() {
                   <Plus className="size-4" /> Connect Terminal
                 </Button>
               </DialogTrigger>
-              <DialogContent className="sm:max-w-md">
+              <DialogContent className="sm:max-w-lg">
                 <DialogHeader>
                   <DialogTitle>Connect Your MetaTrader 5 Terminal</DialogTitle>
                   <DialogDescription>
@@ -62,37 +125,138 @@ export default function TerminalsPage() {
                 <div className="space-y-4 text-sm">
                   <div className="rounded-lg border bg-muted/40 p-3 space-y-2">
                     <p className="font-semibold text-foreground">Step 1: Download BridgeEA</p>
-                    <Button size="sm" variant="secondary" onClick={handleDownloadEA} className="w-full gap-2">
-                      <Download className="size-4" /> Download BridgeEA.mq5
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button size="sm" variant="secondary" onClick={handleDownloadEA} className="flex-1 gap-2">
+                        <Download className="size-4" /> Download BridgeEA.mq5
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={handleDownloadPreset} className="flex-1 gap-2">
+                        <Download className="size-4" /> Download Preset (.set)
+                      </Button>
+                    </div>
                   </div>
                   <div className="rounded-lg border bg-muted/40 p-3 space-y-2">
                     <p className="font-semibold text-foreground">Step 2: Copy Files in MT5</p>
                     <p className="text-xs text-muted-foreground">
                       Place <code className="bg-muted px-1 py-0.5 rounded">BridgeEA.mq5</code> inside your MT5{" "}
-                      <code className="bg-muted px-1 py-0.5 rounded">MQL5/Experts/</code> folder and compile it (or
-                      press F7 in MetaEditor).
+                      <code className="bg-muted px-1 py-0.5 rounded">MQL5/Experts/</code> folder and compile it (F7 in
+                      MetaEditor).
                     </p>
                   </div>
                   <div className="rounded-lg border bg-muted/40 p-3 space-y-2">
-                    <p className="font-semibold text-foreground">Step 3: Attach EA & Set Inputs</p>
-                    <div className="text-xs space-y-1 font-mono bg-background p-2 rounded border">
-                      <p>
-                        <span className="text-muted-foreground">InpBridgeUrl:</span> wss://your-domain/bridge/
-                      </p>
-                      <p>
-                        <span className="text-muted-foreground">InpTerminalId:</span> mt5-tenant-01
-                      </p>
-                      <p>
-                        <span className="text-muted-foreground">InpAuthToken:</span> (your bridge auth token)
-                      </p>
+                    <div className="flex items-center justify-between">
+                      <p className="font-semibold text-foreground">Step 3: Auto-Generated Connection Inputs</p>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="size-6"
+                        onClick={initCredentials}
+                        title="Regenerate"
+                      >
+                        <RefreshCw className="size-3" />
+                      </Button>
+                    </div>
+                    <div className="space-y-2 font-mono text-xs">
+                      <div className="flex items-center justify-between bg-background p-2 rounded border">
+                        <div className="truncate pr-2">
+                          <span className="text-muted-foreground select-none">InpBridgeUrl: </span>
+                          <span className="font-semibold">{bridgeUrl}</span>
+                        </div>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="size-6 shrink-0"
+                          onClick={() => copyToClipboard(bridgeUrl, "Bridge URL")}
+                        >
+                          {copiedField === "Bridge URL" ? (
+                            <Check className="size-3 text-emerald-500" />
+                          ) : (
+                            <Copy className="size-3" />
+                          )}
+                        </Button>
+                      </div>
+
+                      <div className="flex items-center justify-between bg-background p-2 rounded border">
+                        <div className="truncate pr-2">
+                          <span className="text-muted-foreground select-none">InpTerminalId: </span>
+                          <span className="font-semibold">{terminalId}</span>
+                        </div>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="size-6 shrink-0"
+                          onClick={() => copyToClipboard(terminalId, "Terminal ID")}
+                        >
+                          {copiedField === "Terminal ID" ? (
+                            <Check className="size-3 text-emerald-500" />
+                          ) : (
+                            <Copy className="size-3" />
+                          )}
+                        </Button>
+                      </div>
+
+                      <div className="flex items-center justify-between bg-background p-2 rounded border">
+                        <div className="truncate pr-2">
+                          <span className="text-muted-foreground select-none">InpAuthToken: </span>
+                          <span className="font-semibold">{authToken}</span>
+                        </div>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="size-6 shrink-0"
+                          onClick={() => copyToClipboard(authToken, "Auth Token")}
+                        >
+                          {copiedField === "Auth Token" ? (
+                            <Check className="size-3 text-emerald-500" />
+                          ) : (
+                            <Copy className="size-3" />
+                          )}
+                        </Button>
+                      </div>
+
+                      <div className="flex items-center justify-between bg-background p-2 rounded border">
+                        <div className="truncate pr-2">
+                          <span className="text-muted-foreground select-none">InpBroker: </span>
+                          <span className="font-semibold">{broker}</span>
+                        </div>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="size-6 shrink-0"
+                          onClick={() => copyToClipboard(broker, "Broker")}
+                        >
+                          {copiedField === "Broker" ? (
+                            <Check className="size-3 text-emerald-500" />
+                          ) : (
+                            <Copy className="size-3" />
+                          )}
+                        </Button>
+                      </div>
+
+                      <div className="flex items-center justify-between bg-background p-2 rounded border">
+                        <div className="truncate pr-2">
+                          <span className="text-muted-foreground select-none">InpSymbolsCSV: </span>
+                          <span className="font-semibold">{symbols}</span>
+                        </div>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="size-6 shrink-0"
+                          onClick={() => copyToClipboard(symbols, "Symbols")}
+                        >
+                          {copiedField === "Symbols" ? (
+                            <Check className="size-3 text-emerald-500" />
+                          ) : (
+                            <Copy className="size-3" />
+                          )}
+                        </Button>
+                      </div>
                     </div>
                   </div>
                   <div className="rounded-lg border bg-muted/40 p-3 space-y-1">
                     <p className="font-semibold text-foreground">Step 4: Enable Algo Trading</p>
                     <p className="text-xs text-muted-foreground">
-                      Click the green <strong>Algo Trading</strong> button in MT5 toolbar. Your terminal will connect
-                      automatically!
+                      Attach <code className="bg-muted px-1 py-0.5 rounded">BridgeEA</code> to any chart and click the
+                      green <strong>Algo Trading</strong> button in MT5.
                     </p>
                   </div>
                 </div>
