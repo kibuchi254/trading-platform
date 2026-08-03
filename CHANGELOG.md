@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.4.3 (2026-08-03)
+
+### Bug Fixes
+
+- **deploy**: Change grafana host port from 3000 to 3002 to avoid port collision
+  ([`8b4159e`](https://github.com/kibuchi254/trading-platform/commit/8b4159ecfc7fe4a586a8c8a548c6f4ae8ebf2bf7))
+
+
 ## v1.4.2 (2026-08-03)
 
 ### Bug Fixes
