@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v1.8.1 (2026-08-03)
+
+### Bug Fixes
+
+- **terminals**: Make Connect Terminal modal responsive with max-height scroll and full BridgeEA.mq5
+  event handlers
+  ([`0d30f8c`](https://github.com/kibuchi254/trading-platform/commit/0d30f8c2b40c4162b8a42d37b0e9a55837fe1855))
+
+
 ## v1.8.0 (2026-08-03)
 
 ### Features
