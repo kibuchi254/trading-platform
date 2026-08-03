@@ -210,39 +210,38 @@ kubectl rollout undo deployment/atlas-api -n atlas
 
 The API's `preStop` hook sleeps 10 seconds to drain in-flight requests. The Bridge's `preStop` sleeps 30 seconds to allow terminal reconnection to a healthy node.
 
-## MT5 Terminal Setup
+## MT5 Terminal Setup (Remote Tenant Architecture)
 
-The MT5 Bridge EA (`mql5/BridgeEA.mq5`) runs inside MetaTrader 5 under Wine.
+ATLAS uses a decoupled execution adapter model. MetaTrader 5 terminals run remotely on tenant PCs or personal Windows VPS nodes and connect back to the central ATLAS Bridge service over secure WebSockets (`wss://your-domain/bridge/` or `ws://your-server:9000`). The central Linux server runs 100% headless.
 
-### Prerequisites
-- WineHQ Stable installed
-- MetaTrader 5 installed under Wine
-- A broker account (Exness, ICMarkets, Pepperstone, etc.)
+### Tenant Prerequisites
+- MetaTrader 5 desktop client installed on tenant PC / VPS
+- A broker account (Exness, Pepperstone, IC Markets, etc.)
 
-### Installation
+### Installation & Connection Steps
 
-1. Copy `BridgeEA.mq5` to the MT5 `MQL5/Experts/` directory
-2. Compile the EA in MetaEditor (F7)
-3. In MT5, attach the EA to any chart
-4. Configure the EA inputs:
-   - `InpBridgeUrl`: `ws://your-server:9000` (or `wss://your-server/bridge/` behind TLS)
-   - `InpTerminalId`: a unique identifier, e.g. `mt5-exness-01`
-   - `InpBroker`: broker name, e.g. `Exness`
-   - `InpAuthToken`: must match `BRIDGE_AUTH_TOKEN` on the backend
-   - `InpSymbolsCSV`: comma-separated symbols to stream
-5. Enable "Allow Algorithmic Trading" in MT5 settings
-6. The EA will connect, register, and start streaming ticks
+1. In the ATLAS Admin Console (**Terminals** page), click **Connect Terminal** and download `BridgeEA.mq5`.
+2. Copy `BridgeEA.mq5` to the tenant's local MT5 `MQL5/Experts/` directory and compile in MetaEditor (`F7`).
+3. In MT5, attach `BridgeEA` to any chart (e.g. EURUSD).
+4. Set the EA inputs:
+   - `InpBridgeUrl`: `wss://your-domain/bridge/` (or `ws://your-server-ip:2848`)
+   - `InpTerminalId`: unique identifier (e.g. `mt5-tenant-01`)
+   - `InpBroker`: broker name (e.g. `Exness`)
+   - `InpAuthToken`: matches tenant's `BRIDGE_AUTH_TOKEN`
+   - `InpSymbolsCSV`: comma-separated symbols to stream (e.g. `XAUUSD,EURUSD,GBPUSD`)
+5. Enable **"Allow Algorithmic Trading"** in MT5.
+6. The terminal will immediately register and appear **ONLINE** in the ATLAS Console.
 
-### Verifying the Connection
+### Verifying Connection & Health
 
 ```bash
-# Check terminal is registered
+# Check registered terminals in ATLAS API
 curl -H "Authorization: Bearer $TOKEN" \
   http://localhost:8000/api/v1/terminals
 
-# Force a position sync
+# Force a position sync for a connected terminal
 curl -X POST -H "Authorization: Bearer $TOKEN" \
-  http://localhost:8000/api/v1/terminals/mt5-exness-01/sync-positions
+  http://localhost:8000/api/v1/terminals/mt5-tenant-01/sync-positions
 ```
 
 ## Backup & Restore

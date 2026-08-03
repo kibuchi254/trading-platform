@@ -1,4 +1,4 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 
 /**
  * Guard the dashboard. If no `atlas_access` cookie, redirect to login.

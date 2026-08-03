@@ -22,8 +22,8 @@
 ATLAS is a production-grade algorithmic trading platform that treats MetaTrader 5 as **just
 one of many possible execution adapters**. The backend is the brain; the AI modules are the
 analysts; the strategy engine is the decision-maker; the risk engine is the guardian; the
-MT5 Bridge is the messenger; and MT5 (running under Wine on the host) is simply an execution
-adapter. A Next.js + shadcn admin console gives you full visual control of every domain.
+MT5 Bridge is the messenger; and remote MT5 terminals (running on tenant PCs or Windows VPS)
+act as execution adapters over secure WebSockets. A Next.js + shadcn admin console gives you full visual control of every domain.
 
 > **Status:** Core vertical slice shipped — terminal register → heartbeat → place order →
 > execution report → position sync — plus a full admin console and 17 management dashboards.
