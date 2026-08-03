@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.4.1 (2026-08-03)
+
+### Bug Fixes
+
+- Correct prometheus.yml volume mount path relative to compose file
+  ([`398f2e9`](https://github.com/kibuchi254/trading-platform/commit/398f2e9c0e1264c46e446d6505f392dc36570f94))
+
+
 ## v1.4.0 (2026-08-03)
 
 ### Features
