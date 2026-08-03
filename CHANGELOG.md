@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.5.4 (2026-08-03)
+
+### Bug Fixes
+
+- **deploy**: Fix frontend healthcheck (hits a 200 page, not the redirecting /)
+  ([`50284b0`](https://github.com/kibuchi254/trading-platform/commit/50284b067dd14a7cef086d23f7f9a8a0772efbec))
+
+
 ## v1.5.3 (2026-08-03)
 
 ### Bug Fixes
