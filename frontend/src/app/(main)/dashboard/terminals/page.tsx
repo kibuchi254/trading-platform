@@ -120,24 +120,39 @@ export default function TerminalsPage() {
                   <Plus className="size-4" /> Connect Terminal
                 </Button>
               </DialogTrigger>
-              <DialogContent className="sm:max-w-lg">
-                <DialogHeader>
+              <DialogContent className="max-h-[90vh] sm:max-w-xl overflow-hidden flex flex-col p-0 border">
+                <DialogHeader className="p-6 pb-2 border-b bg-background">
                   <DialogTitle>Connect Your MetaTrader 5 Terminal</DialogTitle>
                   <DialogDescription>
                     Follow these steps to connect MT5 running on your PC or Windows VPS to ATLAS.
                   </DialogDescription>
                 </DialogHeader>
-                <div className="space-y-4 text-sm">
-                  <div className="rounded-lg border bg-muted/40 p-3 space-y-2">
+                <div className="flex-1 overflow-y-auto p-6 space-y-4 text-sm">
+                  <div className="rounded-lg border bg-muted/40 p-3.5 space-y-2">
                     <p className="font-semibold text-foreground">Step 1: Download Required Files</p>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                      <Button size="sm" variant="secondary" onClick={handleDownloadEA} className="gap-1.5 text-xs">
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={handleDownloadEA}
+                        className="gap-1.5 text-xs w-full"
+                      >
                         <Download className="size-3.5" /> BridgeEA.mq5
                       </Button>
-                      <Button size="sm" variant="secondary" onClick={handleDownloadDLL} className="gap-1.5 text-xs">
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={handleDownloadDLL}
+                        className="gap-1.5 text-xs w-full"
+                      >
                         <Download className="size-3.5" /> atlas_bridge.dll
                       </Button>
-                      <Button size="sm" variant="outline" onClick={handleDownloadPreset} className="gap-1.5 text-xs">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={handleDownloadPreset}
+                        className="gap-1.5 text-xs w-full"
+                      >
                         <Download className="size-3.5" /> Preset (.set)
                       </Button>
                     </div>
