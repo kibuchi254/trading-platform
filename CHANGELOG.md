@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.4.0 (2026-08-03)
+
+### Features
+
+- Add frontend source and Dockerfile for CI builds
+  ([`be9b020`](https://github.com/kibuchi254/trading-platform/commit/be9b020c516664003b9cbe0c51b00ffc2dc41cdc))
+
+
 ## v1.3.0 (2026-08-03)
 
 ### Features
