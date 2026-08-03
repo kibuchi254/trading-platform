@@ -38,7 +38,9 @@ class StrategyOut(BaseModel):
 
 
 @router.get("/available")
-async def list_available_strategies() -> list[dict[str, object]]:
+async def list_available_strategies(
+    user: CurrentUser = Depends(get_current_user),
+) -> list[dict[str, object]]:
     """List strategies the SDK knows about (built-in + registered plugins)."""
     reg = get_strategy_registry()
     return [
