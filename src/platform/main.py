@@ -13,12 +13,21 @@ from platform.api.v1 import (
     admin,
     ai,
     analytics,
+    audit,
     auth,
+    backtests,
+    brokers,
     market_data,
+    notifications,
     orders,
+    positions,
     risk,
+    risk_events,
+    signals,
     strategies,
     terminals,
+    trades,
+    users,
 )
 from platform.api.ws import terminal_events, ticks
 from platform.core.config import get_settings
@@ -149,7 +158,26 @@ def create_app() -> FastAPI:
     )
 
     # ── REST routers ─────────────────────────────────────────────────────
-    api_v1 = [auth, terminals, strategies, orders, ai, risk, analytics, admin, market_data]
+    api_v1 = [
+        auth,
+        terminals,
+        strategies,
+        orders,
+        positions,
+        trades,
+        signals,
+        backtests,
+        brokers,
+        market_data,
+        ai,
+        risk,
+        risk_events,
+        analytics,
+        notifications,
+        admin,
+        users,
+        audit,
+    ]
     for r in api_v1:
         app.include_router(r.router, prefix="/api/v1")
 

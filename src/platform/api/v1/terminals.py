@@ -115,3 +115,22 @@ async def sync_account(
 
     reply = await get_bridge_client().sync_account(terminal_id=terminal_id)
     return {"status": "ok", "account": reply.payload}
+
+
+@router.post("/{terminal_id}/flatten")
+async def flatten_terminal(
+    terminal_id: str,
+    user: CurrentUser = Depends(get_current_user),
+) -> dict:
+    """Emergency button — close all positions + cancel all orders on a terminal."""
+    from platform.application.commands.flatten_all import FlattenAllCommand, handle_flatten_all
+
+    result = await handle_flatten_all(
+        FlattenAllCommand(
+            org_id=user.org_id,
+            user_id=user.user_id,
+            terminal_id=terminal_id,
+            reason=f"manual by {user.user_id}",
+        )
+    )
+    return result.model_dump(mode="json")
