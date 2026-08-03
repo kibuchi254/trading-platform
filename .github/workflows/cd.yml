@@ -104,8 +104,11 @@ jobs:
             echo "${GHCR_TOKEN}" | docker login ghcr.io \
               -u "${{ github.actor }}" --password-stdin
 
-            echo "▶ Pulling image: ${REGISTRY}/${GITHUB_REPOSITORY}/atlas-api:${IMAGE_TAG}"
+            echo "▶ Pulling backend image: ${REGISTRY}/${GITHUB_REPOSITORY}/atlas-api:${IMAGE_TAG}"
             docker pull "${REGISTRY}/${GITHUB_REPOSITORY}/atlas-api:${IMAGE_TAG}"
+
+            echo "▶ Pulling frontend image: ${REGISTRY}/${GITHUB_REPOSITORY}/atlas-frontend:${IMAGE_TAG}"
+            docker pull "${REGISTRY}/${GITHUB_REPOSITORY}/atlas-frontend:${IMAGE_TAG}"
 
             echo "▶ Pinning IMAGE_TAG in .env..."
             if grep -q '^IMAGE_TAG=' .env 2>/dev/null; then
@@ -123,39 +126,19 @@ jobs:
               fi
             done
 
-            echo "▶ Ensuring infrastructure services are up (postgres, redis)..."
-            docker compose \
+            COMPOSE="docker compose \
               --project-name atlas \
-              --env-file "${{ env.DEPLOY_DIR }}/.env" \
-              -f "${{ env.DEPLOY_DIR }}/deploy/server/docker-compose.prod.yml" \
-              up -d --remove-orphans postgres redis
+              --env-file ${{ env.DEPLOY_DIR }}/.env \
+              -f ${{ env.DEPLOY_DIR }}/deploy/server/docker-compose.prod.yml"
 
-            echo "▶ Waiting 10s for infrastructure to be ready..."
-            sleep 10
+            echo "▶ Deploying full stack..."
+            ${COMPOSE} up -d --remove-orphans
 
-            echo "▶ Rolling update — api first..."
-            docker compose \
-              --project-name atlas \
-              --env-file "${{ env.DEPLOY_DIR }}/.env" \
-              -f "${{ env.DEPLOY_DIR }}/deploy/server/docker-compose.prod.yml" \
-              up -d --no-deps --remove-orphans api
-
-            echo "▶ Waiting 20s for API to stabilise..."
-            sleep 20
-
-            echo "▶ Rolling update — bridge and worker..."
-            docker compose \
-              --project-name atlas \
-              --env-file "${{ env.DEPLOY_DIR }}/.env" \
-              -f "${{ env.DEPLOY_DIR }}/deploy/server/docker-compose.prod.yml" \
-              up -d --no-deps bridge worker
+            echo "▶ Waiting for database migrations to complete..."
+            ${COMPOSE} wait migrate 2>/dev/null || true
 
             echo "▶ Final container status:"
-            docker compose \
-              --project-name atlas \
-              --env-file "${{ env.DEPLOY_DIR }}/.env" \
-              -f "${{ env.DEPLOY_DIR }}/deploy/server/docker-compose.prod.yml" \
-              ps
+            ${COMPOSE} ps
 
             echo "▶ Done: ${IMAGE_TAG}"
         env:
@@ -169,19 +152,23 @@ jobs:
         run: |
           echo "Waiting 30s for containers to fully start..."
           sleep 30
+
+          echo "Checking API health..."
           for i in 1 2 3 4 5; do
             STATUS=$(curl -sf -o /dev/null -w "%{http_code}" \
               --max-time 10 \
               "${{ secrets.HEALTH_URL }}" || echo "000")
-            echo "Attempt ${i}/5: HTTP ${STATUS}"
+            echo "API attempt ${i}/5: HTTP ${STATUS}"
             if [ "${STATUS}" = "200" ]; then
-              echo "✅ Health check passed"
-              exit 0
+              echo "✅ API health check passed"
+              break
+            fi
+            if [ "${i}" = "5" ]; then
+              echo "::error::API health check failed after 5 attempts"
+              exit 1
             fi
             sleep 10
           done
-          echo "::error::Health check failed after 5 attempts"
-          exit 1
 
       - name: Rollback on failure
         if: failure() && env.HAS_SSH_HOST == 'true'
@@ -194,12 +181,11 @@ jobs:
           script: |
             echo "⚠ Deploy failed — rolling back to previous image..."
             cd "${{ env.DEPLOY_DIR }}"
-            # docker compose restart uses the last successful image on disk
             docker compose \
               --project-name atlas \
               --env-file "${{ env.DEPLOY_DIR }}/.env" \
               -f "${{ env.DEPLOY_DIR }}/deploy/server/docker-compose.prod.yml" \
-              restart api bridge worker || true
+              restart api bridge worker frontend || true
             docker compose \
               --project-name atlas \
               --env-file "${{ env.DEPLOY_DIR }}/.env" \
@@ -213,6 +199,8 @@ jobs:
           echo "| | |" >> $GITHUB_STEP_SUMMARY
           echo "|---|---|" >> $GITHUB_STEP_SUMMARY
           echo "| **Image tag** | \`${{ steps.tag.outputs.tag }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Backend** | \`atlas-api:${{ steps.tag.outputs.tag }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Frontend** | \`atlas-frontend:${{ steps.tag.outputs.tag }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| **Server** | \`${{ secrets.SSH_HOST }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| **URL** | ${{ vars.PRODUCTION_URL }} |" >> $GITHUB_STEP_SUMMARY
           echo "| **Deployed at** | $(date -u) |" >> $GITHUB_STEP_SUMMARY

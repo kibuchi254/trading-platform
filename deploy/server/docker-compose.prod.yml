@@ -6,11 +6,16 @@
 # The IMAGE_TAG, REGISTRY, and GITHUB_REPOSITORY variables are injected by CI.
 # All application secrets come from /opt/atlas/.env on the server.
 #
+# CloudPanel is used as the external reverse proxy instead of Docker nginx.
+#
 # One-time server setup: run deploy/server/setup.sh as root.
 # ─────────────────────────────────────────────────────────────────────────────
 
 x-app-image: &app-image
   image: ${REGISTRY:-ghcr.io}/${GITHUB_REPOSITORY}/atlas-api:${IMAGE_TAG:-latest}
+
+x-frontend-image: &frontend-image
+  image: ${REGISTRY:-ghcr.io}/${GITHUB_REPOSITORY}/atlas-frontend:${IMAGE_TAG:-latest}
 
 x-app-base: &app-base
   <<: *app-image
@@ -85,9 +90,27 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  # ─── Database Migration (runs once per deploy) ────────────────────────────
+  migrate:
+    <<: *app-base
+    command: alembic upgrade head
+    restart: "no"
+    healthcheck:
+      test: ["CMD-SHELL", "echo done"]
+      interval: 5s
+      timeout: 5s
+      retries: 1
+
   # ─── Application Services ─────────────────────────────────────────────────
   api:
     <<: *app-base
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      migrate:
+        condition: service_completed_successfully
     ports:
       - "0.0.0.0:2847:8000"   # External app port 2847 → internal API port 8000
     command: >
@@ -146,6 +169,30 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  # ─── Frontend ──────────────────────────────────────────────────────────────
+  frontend:
+    <<: *frontend-image
+    restart: unless-stopped
+    environment:
+      - API_URL=http://api:8000
+      - NODE_ENV=production
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:3001:3000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:3000 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
+
   # ─── Observability ────────────────────────────────────────────────────────
   prometheus:
     image: prom/prometheus:v2.55.0
@@ -181,36 +228,8 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  # ─── Reverse Proxy ────────────────────────────────────────────────────────
-  nginx:
-    image: nginx:1.27-alpine
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./ssl:/etc/nginx/ssl:ro          # Mount TLS certs (or use Certbot volume)
-      - certbot_www:/var/www/certbot:ro  # For Let's Encrypt HTTP challenge
-    depends_on:
-      api:
-        condition: service_healthy
-      bridge:
-        condition: service_started
-    healthcheck:
-      test: ["CMD", "curl", "-sf", "http://localhost/health"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "50m"
-        max-file: "10"
-
 volumes:
   postgres_data:
   redis_data:
   prometheus_data:
   grafana_data:
-  certbot_www:

@@ -109,7 +109,7 @@ SECRET_KEY=CHANGE_ME_AT_LEAST_32_RANDOM_CHARS
 # API
 API_HOST=0.0.0.0
 API_PORT=8000
-CORS_ORIGINS=https://app.atlas.example.com
+CORS_ORIGINS=https://atlas.vorte.dev
 
 # MT5 Bridge
 BRIDGE_HOST=0.0.0.0
@@ -198,6 +198,7 @@ ufw allow 22/tcp             comment "SSH"
 ufw allow 80/tcp             comment "HTTP"
 ufw allow 443/tcp            comment "HTTPS"
 ufw allow "${APP_PORT}/tcp" comment "ATLAS API"
+ufw allow 2848/tcp           comment "ATLAS Bridge (MT5)"
 
 ufw --force enable
 ok "Firewall enabled:"
@@ -205,6 +206,7 @@ ok "  - Port 22/tcp        (SSH)"
 ok "  - Port 80/tcp        (HTTP)"
 ok "  - Port 443/tcp       (HTTPS)"
 ok "  - Port ${APP_PORT}/tcp  (ATLAS API)"
+ok "  - Port 2848/tcp       (ATLAS Bridge / MT5)"
 
 # ══════════════════════════════════════════════════════════════════════════════
 step "Step 9 — Fail2Ban (brute-force protection)"
