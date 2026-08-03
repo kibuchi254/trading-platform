@@ -2,6 +2,22 @@
 
 <!-- version list -->
 
+## v1.5.0 (2026-08-03)
+
+### Documentation
+
+- Rewrite README and add architecture/API/dev/security suite
+  ([`bf1053b`](https://github.com/kibuchi254/trading-platform/commit/bf1053b1adaccb8bf680479bcc6fe6012825c146))
+
+### Features
+
+- **api**: Add management REST routers for the admin console
+  ([`4bfcc5a`](https://github.com/kibuchi254/trading-platform/commit/4bfcc5a60c599d65c3bbefc8e53e1496caf576a5))
+
+- **deploy**: Wire frontend service into compose and nginx routing
+  ([`de0c698`](https://github.com/kibuchi254/trading-platform/commit/de0c698ebfc85513a14f8820aadfa274bd5bb1f1))
+
+
 ## v1.4.3 (2026-08-03)
 
 ### Bug Fixes
