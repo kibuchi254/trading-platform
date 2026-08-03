@@ -83,8 +83,13 @@ export default function TerminalsPage() {
     toast.success("Downloading BridgeEA.mq5");
   };
 
+  const handleDownloadDLL = () => {
+    window.open("/api/downloads/atlas-bridge-dll", "_blank");
+    toast.success("Downloading atlas_bridge.dll");
+  };
+
   const handleDownloadPreset = () => {
-    const setContent = `InpBridgeUrl=${bridgeUrl}\nInpTerminalId=${terminalId}\nInpBroker=Exness\nInpAuthToken=${authToken}\nInpSymbolsCSV=EURUSD,GBPUSD,USDJPY,XAUUSD\nInpHeartbeatSeconds=10\nInpReconnectMs=3000\nInpMagic=770000\n`;
+    const setContent = `InpBridgeUrl=${bridgeUrl}\nInpTerminalId=${terminalId}\nInpBroker=${broker}\nInpAuthToken=${authToken}\nInpSymbolsCSV=${symbols}\nInpHeartbeatSeconds=10\nInpReconnectMs=3000\nInpMagic=770000\n`;
     const blob = new Blob([setContent], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -124,22 +129,27 @@ export default function TerminalsPage() {
                 </DialogHeader>
                 <div className="space-y-4 text-sm">
                   <div className="rounded-lg border bg-muted/40 p-3 space-y-2">
-                    <p className="font-semibold text-foreground">Step 1: Download BridgeEA</p>
-                    <div className="flex gap-2">
-                      <Button size="sm" variant="secondary" onClick={handleDownloadEA} className="flex-1 gap-2">
-                        <Download className="size-4" /> Download BridgeEA.mq5
+                    <p className="font-semibold text-foreground">Step 1: Download Required Files</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <Button size="sm" variant="secondary" onClick={handleDownloadEA} className="gap-1.5 text-xs">
+                        <Download className="size-3.5" /> BridgeEA.mq5
                       </Button>
-                      <Button size="sm" variant="outline" onClick={handleDownloadPreset} className="flex-1 gap-2">
-                        <Download className="size-4" /> Download Preset (.set)
+                      <Button size="sm" variant="secondary" onClick={handleDownloadDLL} className="gap-1.5 text-xs">
+                        <Download className="size-3.5" /> atlas_bridge.dll
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={handleDownloadPreset} className="gap-1.5 text-xs">
+                        <Download className="size-3.5" /> Preset (.set)
                       </Button>
                     </div>
                   </div>
                   <div className="rounded-lg border bg-muted/40 p-3 space-y-2">
                     <p className="font-semibold text-foreground">Step 2: Copy Files in MT5</p>
                     <p className="text-xs text-muted-foreground">
-                      Place <code className="bg-muted px-1 py-0.5 rounded">BridgeEA.mq5</code> inside your MT5{" "}
-                      <code className="bg-muted px-1 py-0.5 rounded">MQL5/Experts/</code> folder and compile it (F7 in
-                      MetaEditor).
+                      Place <code className="bg-muted px-1 py-0.5 rounded">BridgeEA.mq5</code> in MT5{" "}
+                      <code className="bg-muted px-1 py-0.5 rounded">MQL5/Experts/</code>, and place{" "}
+                      <code className="bg-muted px-1 py-0.5 rounded">atlas_bridge.dll</code> in MT5{" "}
+                      <code className="bg-muted px-1 py-0.5 rounded">MQL5/Libraries/</code>. Press F7 in MetaEditor to
+                      compile.
                     </p>
                   </div>
                   <div className="rounded-lg border bg-muted/40 p-3 space-y-2">
