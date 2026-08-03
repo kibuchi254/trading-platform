@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.5.1 (2026-08-03)
+
+### Bug Fixes
+
+- **nginx**: Route /docs /redoc /openapi.json to the API
+  ([`3d718fb`](https://github.com/kibuchi254/trading-platform/commit/3d718fb09e005b51e56f6c31fd12c8254e8b1783))
+
+
 ## v1.5.0 (2026-08-03)
 
 ### Documentation
