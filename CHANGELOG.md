@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v1.7.0 (2026-08-03)
+
+### Features
+
+- **terminals**: Add wss://backend.vorte.dev/bridge/ host default and 1-click copy buttons for all 5
+  MT5 parameters
+  ([`e6ff9ca`](https://github.com/kibuchi254/trading-platform/commit/e6ff9caf46ad051695a6df075dbf301ba5bd8cc2))
+
+
 ## v1.6.0 (2026-08-03)
 
 ### Features
