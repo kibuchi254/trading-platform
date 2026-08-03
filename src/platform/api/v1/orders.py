@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+from platform.application.commands.cancel_order import CancelOrderCommand, handle_cancel_order
 from platform.application.commands.place_order import (
     PlaceOrderCommand,
     PlaceOrderResult,
     handle_place_order,
 )
 from platform.core.dependencies import CurrentUser, get_current_user
+from platform.core.exceptions import NotFoundError
 from platform.db.models import Order as OrderModel
 from platform.db.session import get_db
 from uuid import UUID
@@ -132,3 +134,32 @@ async def get_order(
         rejection_reason=r.rejection_reason,
         created_at=r.created_at.isoformat(),
     )
+
+
+@router.post("/{order_id}/cancel")
+async def cancel_order(
+    order_id: UUID,
+    user: CurrentUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Cancel a pending order. Resolves the terminal_id from the order row."""
+    r = await db.get(OrderModel, order_id)
+    if r is None or r.org_id != user.org_id:
+        raise NotFoundError(f"Order {order_id} not found")
+
+    # Resolve the external terminal_id from the internal FK.
+    from platform.db.models import Terminal
+
+    terminal = await db.get(Terminal, r.terminal_id)
+    if terminal is None:
+        raise NotFoundError(f"Terminal for order {order_id} not found")
+
+    result = await handle_cancel_order(
+        CancelOrderCommand(
+            org_id=user.org_id,
+            user_id=user.user_id,
+            order_id=order_id,
+            terminal_id=terminal.terminal_id,
+        )
+    )
+    return result.model_dump(mode="json")
