@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.3.0 (2026-08-03)
+
+### Features
+
+- Unified CI/CD pipeline — build and deploy frontend alongside backend
+  ([`11a1ebb`](https://github.com/kibuchi254/trading-platform/commit/11a1ebbf43f33c8bde24b778d0dd17d7e1b2300a))
+
+
 ## v1.2.0 (2026-07-10)
 
 
