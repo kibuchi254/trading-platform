@@ -52,7 +52,12 @@ celery -A platform.infrastructure.celery_app worker -l info
 # 9. Start Celery Beat for periodic tasks (terminal 4)
 celery -A platform.infrastructure.celery_app beat -l info
 
-# 10. Open API docs at http://localhost:8000/docs
+# 10. Start the admin console (terminal 5)
+cd frontend && bun install && bun run dev
+#   Open http://localhost:3000 → register / login against the API on :8000.
+#   Copy frontend/.env.example to frontend/.env.local and adjust if needed.
+
+# 11. Open API docs at http://localhost:8000/docs
 ```
 
 ## Single-VM Production (Docker Compose)
@@ -80,6 +85,7 @@ curl http://localhost/health/detailed
 | Service | Port | Purpose |
 |---------|------|---------|
 | nginx | 80, 443 | Edge — TLS, routing, rate limit |
+| frontend | 3000 (internal) | Next.js admin console (REST + WS client) |
 | api | 8000 (internal) | FastAPI REST + WebSocket |
 | bridge | 9000 (internal) | MT5 terminal WebSocket server |
 | worker | — | Celery background tasks |
@@ -88,6 +94,34 @@ curl http://localhost/health/detailed
 | redis | 6379 | Cache + pubsub + Celery broker |
 | prometheus | 9091 | Metrics scraper |
 | grafana | 3000 | Dashboards |
+
+### Admin Console (Frontend)
+
+The Next.js admin console (`frontend/`) is the operator UI for the whole platform:
+terminals, orders/positions/trades (the "books"), signals, market data, strategies,
+backtests, the risk kill-switch, AI analysis + assistant, performance analytics,
+and admin (system status, users, audit log). It authenticates against the backend
+JWT flow and streams live ticks/terminal-events over WebSocket.
+
+**Local dev:** `cd frontend && bun install && bun run dev` → http://localhost:3000.
+First run: visit `/auth/v1/register` to create an org + admin, or `/auth/v1/login`.
+
+**In the Docker stack:** the `frontend` service builds with `docker/frontend.Dockerfile`
+(`oven/bun` image, Next standalone output). nginx routes `/` → frontend, `/api/v1` → api,
+`/api/auth` → frontend BFF (cookie issuing), `/ws` → api (WebSockets), `/bridge` → bridge.
+
+- `NEXT_PUBLIC_API_URL` / `NEXT_PUBLIC_WS_URL` (build args, baked into the client):
+  empty = same-origin through nginx (recommended for single-VM). Override for a
+  split-host deploy where the browser reaches the API on a different origin.
+- `API_URL` (server runtime env): the internal URL the BFF route handlers use to
+  reach the API. In Docker: `http://api:8000`.
+
+```bash
+# Rebuild the frontend image (e.g. after a UI change)
+docker compose build frontend
+docker compose up -d frontend
+docker compose logs -f frontend
+```
 
 ### Logs
 
