@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.8.0 (2026-08-03)
+
+### Features
+
+- **terminals**: Add Download atlas_bridge.dll button and API route
+  ([`61d7f74`](https://github.com/kibuchi254/trading-platform/commit/61d7f74dc51935f36086e31fea55c24db43666de))
+
+
 ## v1.7.0 (2026-08-03)
 
 ### Features
