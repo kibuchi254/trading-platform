@@ -9,9 +9,12 @@
 
 import type { ApiKey, TokenPair } from "./types";
 
-export const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+// Empty default = same-origin: the browser calls /api/v1/... relative to the
+// page origin, which your reverse proxy routes to the API. For local dev,
+// frontend/.env.local sets NEXT_PUBLIC_API_URL=http://localhost:8000.
+export const API_URL = process.env.NEXT_PUBLIC_API_URL || "";
 
-export const WS_URL = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8000";
+export const WS_URL = process.env.NEXT_PUBLIC_WS_URL || "";
 
 const ACCESS_COOKIE = "atlas_access";
 
