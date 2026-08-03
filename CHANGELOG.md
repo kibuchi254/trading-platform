@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.5.3 (2026-08-03)
+
+### Bug Fixes
+
+- **console**: Default API/WS base URL to same-origin, not localhost:8000
+  ([`3cc4bb0`](https://github.com/kibuchi254/trading-platform/commit/3cc4bb042c0d5039094d98474411f03ea3c34368))
+
+
 ## v1.5.2 (2026-08-03)
 
 ### Bug Fixes
