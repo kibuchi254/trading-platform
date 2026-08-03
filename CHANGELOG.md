@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.6.0 (2026-08-03)
+
+### Features
+
+- **terminals**: Add tenant MT5 onboarding guide and BridgeEA download API route
+  ([`08c49ff`](https://github.com/kibuchi254/trading-platform/commit/08c49ff22b3b10e5bf2f63ba2acef1700e796c74))
+
+
 ## v1.5.4 (2026-08-03)
 
 ### Bug Fixes
