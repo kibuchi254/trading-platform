@@ -1,6 +1,6 @@
 /** BFF register route — proxies POST /api/v1/auth/register (org + admin bootstrap). */
 
-const API_URL = process.env.API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const API_URL = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || "http://api:8000";
 
 const ACCESS_COOKIE = "atlas_access";
 const REFRESH_COOKIE = "atlas_refresh";

@@ -9,9 +9,9 @@
 
 import type { ApiKey, TokenPair } from "./types";
 
-export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+export const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
-export const WS_URL = process.env.NEXT_PUBLIC_WS_URL ?? "ws://localhost:8000";
+export const WS_URL = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8000";
 
 const ACCESS_COOKIE = "atlas_access";
 

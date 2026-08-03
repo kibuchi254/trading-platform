@@ -11,7 +11,7 @@ export async function POST() {
   if (!refresh) return Response.json({ ok: false }, { status: 401 });
 
   const res = await fetch(
-    `${process.env.API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"}/api/v1/auth/refresh`,
+    `${process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || "http://api:8000"}/api/v1/auth/refresh`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
