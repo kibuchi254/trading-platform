@@ -6,6 +6,7 @@
 @import "../styles/presets/brutalist.css";
 @import "../styles/presets/soft-pop.css";
 @import "../styles/presets/tangerine.css";
+@import "../styles/presets/neo.css";
 
 @custom-variant dark (&:is(.dark *));
 

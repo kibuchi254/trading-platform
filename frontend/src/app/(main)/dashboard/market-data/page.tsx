@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { Gauge } from "lucide-react";
 import { Bar, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
@@ -8,21 +8,29 @@ import { Bar, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, 
 import { ErrorState, LoadingState, PageHeader } from "@/components/atlas/ui";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { getCandles, listSymbols } from "@/lib/api/endpoints";
+import { getCandles, listSymbols, listTerminals } from "@/lib/api/endpoints";
 import { useAsync } from "@/lib/api/hooks";
 
 export default function MarketDataPage() {
   const symbols = useAsync(() => listSymbols(), []);
+  const terminals = useAsync(() => listTerminals("online"), []);
+  const connectedTerminal = terminals.data?.[0] ?? null;
   const [symbol, setSymbol] = useState("EURUSD");
   const [timeframe, setTimeframe] = useState("M15");
 
-  useEffect(() => {
-    if (symbols.data && symbols.data.length && !symbols.data.find((s) => s.name === symbol)) {
-      setSymbol(symbols.data[0].name);
+  const symbolOptions = useMemo(() => {
+    if (connectedTerminal && connectedTerminal.symbols.length > 0) {
+      return connectedTerminal.symbols;
     }
-  }, [symbols.data, symbol]);
+    return (symbols.data ?? []).map((s) => s.name);
+  }, [connectedTerminal, symbols.data]);
+
+  useEffect(() => {
+    if (symbolOptions.length > 0 && !symbolOptions.includes(symbol)) {
+      setSymbol(symbolOptions[0]);
+    }
+  }, [symbolOptions, symbol]);
 
   const candles = useAsync(() => getCandles(symbol, timeframe, 200), [symbol, timeframe]);
   const chartData = (candles.data ?? []).map((c) => ({
@@ -41,7 +49,21 @@ export default function MarketDataPage() {
         description="Instrument catalog and historical OHLC bars."
         actions={
           <div className="flex gap-2">
-            <Input value={symbol} onChange={(e) => setSymbol(e.target.value.toUpperCase())} className="w-24" />
+            <select
+              value={symbol}
+              onChange={(e) => setSymbol(e.target.value)}
+              className="h-9 rounded-md border bg-background px-2 text-sm"
+            >
+              {symbolOptions.length === 0 ? (
+                <option value={symbol}>{symbol}</option>
+              ) : (
+                symbolOptions.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))
+              )}
+            </select>
             <select
               value={timeframe}
               onChange={(e) => setTimeframe(e.target.value)}
@@ -68,7 +90,7 @@ export default function MarketDataPage() {
             ) : candles.error ? (
               <ErrorState message={candles.error.message} />
             ) : chartData.length === 0 ? (
-              <p className="py-12 text-center text-sm text-muted-foreground">No candle data.</p>
+              <p className="py-12 text-center text-muted-foreground text-sm">No candle data.</p>
             ) : (
               <ResponsiveContainer width="100%" height={340}>
                 <ComposedChart data={chartData}>
@@ -77,12 +99,12 @@ export default function MarketDataPage() {
                   <YAxis yAxisId="price" tick={{ fontSize: 11 }} domain={["auto", "auto"]} />
                   <YAxis yAxisId="vol" orientation="right" tick={{ fontSize: 11 }} />
                   <Tooltip />
-                  <Bar yAxisId="vol" dataKey="volume" fill="hsl(var(--muted))" opacity={0.4} />
+                  <Bar yAxisId="vol" dataKey="volume" fill="var(--color-muted)" opacity={0.4} />
                   <Line
                     yAxisId="price"
                     type="monotone"
                     dataKey="close"
-                    stroke="hsl(var(--primary))"
+                    stroke="var(--color-primary)"
                     dot={false}
                     strokeWidth={2}
                     isAnimationActive={false}

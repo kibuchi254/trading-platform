@@ -30,7 +30,7 @@ from platform.api.v1 import (
     trades,
     users,
 )
-from platform.api.ws import terminal_events, ticks
+from platform.api.ws import account, terminal_events, ticks
 from platform.core.config import get_settings
 from platform.core.exceptions import PlatformError
 from platform.core.logging import configure_logging, get_logger
@@ -186,6 +186,7 @@ def create_app() -> FastAPI:
     # ── WebSocket routers ────────────────────────────────────────────────
     app.include_router(ticks.router, prefix="/ws")
     app.include_router(terminal_events.router, prefix="/ws")
+    app.include_router(account.router, prefix="/ws")
 
     # ── Exception handler ───────────────────────────────────────────────
     @app.exception_handler(PlatformError)

@@ -281,3 +281,14 @@ export interface TickStream {
   volume?: number | null;
   ts?: string;
 }
+
+/** Live MT5 account state — balance/equity/margin pushed by the terminal. */
+export interface AccountState {
+  terminal_id: string;
+  balance: number;
+  equity: number;
+  margin: number;
+  free_margin: number;
+  currency: string;
+  leverage: number;
+}
