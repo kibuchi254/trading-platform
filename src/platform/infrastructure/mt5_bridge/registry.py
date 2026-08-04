@@ -232,8 +232,6 @@ class TerminalRegistry:
                 terminal.status = "offline"
                 await db.commit()
 
-
-
 # Singleton per process
 _registry: TerminalRegistry | None = None
 
