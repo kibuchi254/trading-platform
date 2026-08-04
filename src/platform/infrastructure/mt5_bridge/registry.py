@@ -222,6 +222,7 @@ class TerminalRegistry:
         """Update the Terminal row in PostgreSQL to status='offline'."""
         from platform.db.models import Terminal
         from platform.db.session import db_context
+
         from sqlalchemy import select
 
         async with db_context() as db:
