@@ -187,6 +187,36 @@ async def _update_terminal_heartbeat(terminal_id: str) -> None:
         _log.debug("heartbeat_db_update_failed", terminal_id=terminal_id, exc_info=True)
 
 
+async def _ensure_registered(terminal_id: str) -> None:
+    """If the terminal isn't in the in-memory registry (e.g. after server
+    restart or on a different worker), re-register it from the DB row so that
+    heartbeats, account caching, and command routing all work."""
+    registry = get_registry()
+    existing = await registry.get(terminal_id)
+    if existing is not None:
+        return  # Already in registry
+    # Re-create from DB row
+    try:
+        async with db_context() as db:
+            stmt = select(Terminal).where(Terminal.terminal_id == terminal_id)
+            t = (await db.execute(stmt)).scalar_one_or_none()
+            if t is None:
+                return  # No DB row either — nothing to restore
+        record = TerminalRecord(
+            terminal_id=t.terminal_id,
+            broker=t.broker_account,
+            account=t.broker_account,
+            version=t.version,
+            symbols=t.symbols or [],
+            capabilities=t.capabilities or {},
+            session=HttpSession(session_id=f"http-{t.terminal_id}"),
+        )
+        await registry.register(record)
+        _log.info("terminal_auto_reregistered", terminal_id=terminal_id)
+    except Exception:
+        _log.debug("auto_reregister_failed", terminal_id=terminal_id, exc_info=True)
+
+
 # ── Endpoints ──────────────────────────────────────────────────────────────
 
 
@@ -236,6 +266,7 @@ async def register_terminal(payload: RegisterPayload) -> dict:
 async def ingest_tick(payload: TickPayload) -> dict:
     """Ingest tick from MT5 via native WebRequest — fan out to the event bus so
     the market-data engine builds candles and /ws/ticks streams live."""
+    await _ensure_registered(payload.terminal_id)
     registry = get_registry()
     await registry.heartbeat(payload.terminal_id)
     bus = get_event_bus()
@@ -261,6 +292,7 @@ async def poll_terminal(payload: PollPayload) -> dict:
     equity/margin; we cache it, publish an ACCOUNT_UPDATE (so /ws/account
     streams live), best-effort persist to the `accounts` table, and return any
     queued outbound commands for the terminal to execute."""
+    await _ensure_registered(payload.terminal_id)
     registry = get_registry()
     await registry.heartbeat(payload.terminal_id)
 

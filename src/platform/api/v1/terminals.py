@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
+
+from platform.core.config import get_settings
 from platform.core.dependencies import CurrentUser, get_current_user
 from platform.db.models import Terminal
 from platform.db.session import get_db
@@ -32,12 +35,29 @@ class TerminalOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+def _is_recently_alive(heartbeat: datetime | None, timeout_seconds: int) -> bool:
+    """Return True if the heartbeat is within the timeout window."""
+    if heartbeat is None:
+        return False
+    # Ensure both are offset-aware for comparison
+    now = datetime.now(UTC)
+    if heartbeat.tzinfo is None:
+        # Treat naive as UTC
+        from datetime import timezone
+
+        heartbeat = heartbeat.replace(tzinfo=timezone.utc)
+    return (now - heartbeat) < timedelta(seconds=timeout_seconds)
+
+
 @router.get("", response_model=list[TerminalOut])
 async def list_terminals(
     user: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
     status_filter: str | None = Query(default=None, alias="status"),
 ) -> list[TerminalOut]:
+    settings = get_settings()
+    hb_timeout = settings.bridge_heartbeat_timeout_seconds
+
     stmt = select(Terminal).where(Terminal.org_id == user.org_id)
     if status_filter:
         stmt = stmt.where(Terminal.status == status_filter)
@@ -49,7 +69,10 @@ async def list_terminals(
     for r in rows:
         db_terminal_ids.add(r.terminal_id)
         live = await registry.get(r.terminal_id)
-        is_online = live is not None and live.status == "online"
+        # Online if in-memory registry says so OR DB heartbeat is recent
+        is_online = (live is not None and live.status == "online") or _is_recently_alive(
+            r.last_heartbeat_at, hb_timeout
+        )
         out.append(
             TerminalOut(
                 id=r.id,
