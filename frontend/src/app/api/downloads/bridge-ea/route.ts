@@ -124,7 +124,7 @@ void OnTimer()
    }
 
    // 3. Heartbeat
-   if(GetTickCount64() - g_lastHeartbeat > InpHeartbeatSeconds * 1000)
+   if(GetTickCount64() - g_lastHeartbeat > (ulong)(InpHeartbeatSeconds * 1000))
    {
       SendHeartbeat();
    }
@@ -161,7 +161,7 @@ bool ConnectAndRegister()
       "\\"stop\\":true,\\"close_partial\\":true}}}",
       InpTerminalId, InpTerminalId, InpBroker,
       AccountInfoInteger(ACCOUNT_LOGIN),
-      TerminalInfoString(TERMINAL_VERSION),
+      IntegerToString((int)TerminalInfoInteger(TERMINAL_BUILD)),
       symbolsJson, InpAuthToken);
 
    int sent = ws_send(g_wsHandle, regMsg);
