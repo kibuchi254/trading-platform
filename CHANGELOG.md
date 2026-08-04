@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v1.10.1 (2026-08-04)
+
+### Bug Fixes
+
+- **api**: Mount bridge_http router in FastAPI app factory
+  ([`cece875`](https://github.com/kibuchi254/trading-platform/commit/cece875d3beec918db8cca664f4e48b65f772d94))
+
+### Code Style
+
+- **lint**: Fix ruff import sorting and type annotations in bridge_http.py
+  ([`50a3e97`](https://github.com/kibuchi254/trading-platform/commit/50a3e97d7e740b356e835a0c92ae0ac49056b270))
+
+
 ## v1.10.0 (2026-08-04)
 
 ### Features
