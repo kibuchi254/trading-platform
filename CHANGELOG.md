@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.10.2 (2026-08-04)
+
+### Bug Fixes
+
+- **api**: Instantiate TerminalRecord with HttpSession in bridge_http register endpoint
+  ([`1ec9fff`](https://github.com/kibuchi254/trading-platform/commit/1ec9fffcf4e943dbf92f447fcd512222fd32d508))
+
+
 ## v1.10.1 (2026-08-04)
 
 ### Bug Fixes
