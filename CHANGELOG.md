@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.12.2 (2026-08-04)
+
+### Bug Fixes
+
+- Persist MT5 terminals to PostgreSQL on registration
+  ([`2eab6b5`](https://github.com/kibuchi254/trading-platform/commit/2eab6b50a1b02615d06d327d1276c96ba35faeff))
+
+
 ## v1.12.1 (2026-08-04)
 
 ### Bug Fixes
