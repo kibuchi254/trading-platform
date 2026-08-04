@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.10.0 (2026-08-04)
+
+### Features
+
+- **mt5**: Implement Zero-DLL native MQL5 WebRequest Expert Advisor and HTTP bridge endpoint
+  ([`53c7d19`](https://github.com/kibuchi254/trading-platform/commit/53c7d197738d26e4a93df77d486eb1a031503fe5))
+
+
 ## v1.9.1 (2026-08-04)
 
 ### Bug Fixes
