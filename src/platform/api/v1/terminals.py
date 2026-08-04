@@ -3,18 +3,18 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-
-from platform.core.config import get_settings
-from platform.core.dependencies import CurrentUser, get_current_user
-from platform.db.models import Terminal
-from platform.db.session import get_db
-from platform.infrastructure.mt5_bridge.registry import get_registry
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from platform.core.config import get_settings
+from platform.core.dependencies import CurrentUser, get_current_user
+from platform.db.models import Terminal
+from platform.db.session import get_db
+from platform.infrastructure.mt5_bridge.registry import get_registry
 
 router = APIRouter(prefix="/terminals", tags=["terminals"])
 
@@ -43,9 +43,7 @@ def _is_recently_alive(heartbeat: datetime | None, timeout_seconds: int) -> bool
     now = datetime.now(UTC)
     if heartbeat.tzinfo is None:
         # Treat naive as UTC
-        from datetime import timezone
-
-        heartbeat = heartbeat.replace(tzinfo=timezone.utc)
+        heartbeat = heartbeat.replace(tzinfo=UTC)
     return (now - heartbeat) < timedelta(seconds=timeout_seconds)
 
 
