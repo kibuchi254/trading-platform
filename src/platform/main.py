@@ -16,6 +16,7 @@ from platform.api.v1 import (
     audit,
     auth,
     backtests,
+    bridge_http,
     brokers,
     market_data,
     notifications,
@@ -161,6 +162,7 @@ def create_app() -> FastAPI:
     api_v1 = [
         auth,
         terminals,
+        bridge_http,
         strategies,
         orders,
         positions,
