@@ -2,6 +2,25 @@
 
 <!-- version list -->
 
+## v1.12.0 (2026-08-04)
+
+### Features
+
+- **dashboard**: Neomorphic theme preset + live MT5 account/data wiring
+  ([#133](https://github.com/kibuchi254/trading-platform/pull/133),
+  [`955fc78`](https://github.com/kibuchi254/trading-platform/commit/955fc78b85a7f660d42b2287668cbfb757eb992c))
+
+### Testing
+
+- **signals**: Fix loop-scope + formatting on schema test
+  ([#133](https://github.com/kibuchi254/trading-platform/pull/133),
+  [`955fc78`](https://github.com/kibuchi254/trading-platform/commit/955fc78b85a7f660d42b2287668cbfb757eb992c))
+
+- **signals**: Regression test for signals.status schema column
+  ([#133](https://github.com/kibuchi254/trading-platform/pull/133),
+  [`955fc78`](https://github.com/kibuchi254/trading-platform/commit/955fc78b85a7f660d42b2287668cbfb757eb992c))
+
+
 ## v1.11.0 (2026-08-04)
 
 ### Features
