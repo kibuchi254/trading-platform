@@ -100,6 +100,18 @@ export default function TerminalsPage() {
     toast.success(`Downloaded preset file: ${terminalId}.set`);
   };
 
+  const handleDownloadInstaller = () => {
+    const batContent = `@echo off\r\ntitle ATLAS MT5 1-Click Auto-Installer\r\ncolor 0A\r\n\r\necho ============================================================\r\necho      ATLAS Trading Platform -- MT5 1-Click Auto-Installer\r\necho ============================================================\r\necho.\r\n\r\nset "MT5_BASE=%APPDATA%\\MetaQuotes\\Terminal"\r\n\r\nif not exist "%MT5_BASE%" (\r\n    echo [ERROR] MetaTrader 5 data folder not found at %MT5_BASE%.\r\n    echo Please make sure MetaTrader 5 is installed on your Windows PC.\r\n    echo.\r\n    pause\r\n    exit /b 1\r\n)\r\n\r\necho [INFO] Searching for MetaTrader 5 terminal installations...\r\necho.\r\n\r\nfor /d %%D in ("%MT5_BASE%\\*") do (\r\n    if exist "%%D\\MQL5" (\r\n        echo [FOUND] MT5 Terminal: %%D\r\n        mkdir "%%D\\MQL5\\Experts" 2>nul\r\n        mkdir "%%D\\MQL5\\Libraries" 2>nul\r\n        mkdir "%%D\\MQL5\\Presets" 2>nul\r\n\r\n        ( \r\n            echo InpBridgeUrl=${bridgeUrl}\r\n            echo InpTerminalId=${terminalId}\r\n            echo InpBroker=${broker}\r\n            echo InpAuthToken=${authToken}\r\n            echo InpSymbolsCSV=${symbols}\r\n            echo InpHeartbeatSeconds=10\r\n            echo InpReconnectMs=3000\r\n            echo InpMagic=770000\r\n        ) > "%%D\\MQL5\\Presets\\BridgeEA.set"\r\n\r\n        echo [SUCCESS] Installed pre-configured BridgeEA.set into %%D\\MQL5\\Presets\\\r\n    )\r\n)\r\n\r\necho.\r\necho ============================================================\r\necho  INSTALLATION COMPLETE!\r\necho ============================================================\r\necho  1. Open MetaTrader 5\r\necho  2. Press Ctrl+O -^> Expert Advisors -^> Check "Allow Algorithmic Trading" ^& "Allow DLL imports"\r\necho  3. Drag BridgeEA onto any chart and load the BridgeEA.set preset!\r\necho ============================================================\r\necho.\r\npause\r\n`;
+    const blob = new Blob([batContent], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `Setup-ATLAS-MT5-${terminalId}.bat`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success(`Downloaded 1-Click Auto-Installer: Setup-ATLAS-MT5-${terminalId}.bat`);
+  };
+
   const copyToClipboard = (text: string, label: string) => {
     navigator.clipboard.writeText(text);
     setCopiedField(label);
@@ -128,8 +140,21 @@ export default function TerminalsPage() {
                   </DialogDescription>
                 </DialogHeader>
                 <div className="flex-1 overflow-y-auto p-6 space-y-4 text-sm">
+                  <div className="rounded-lg border border-primary/30 bg-primary/5 p-3.5 space-y-2">
+                    <p className="font-semibold text-primary flex items-center gap-1.5">
+                      ⚡ 1-Click Automatic Windows Setup (Easiest)
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Download and double-click our automatic script to auto-detect your MT5 installation and install
+                      your custom credentials in 1 second!
+                    </p>
+                    <Button size="sm" onClick={handleDownloadInstaller} className="w-full gap-2">
+                      <Download className="size-4" /> Download 1-Click Auto-Installer (.bat)
+                    </Button>
+                  </div>
+
                   <div className="rounded-lg border bg-muted/40 p-3.5 space-y-2">
-                    <p className="font-semibold text-foreground">Step 1: Download Required Files</p>
+                    <p className="font-semibold text-foreground">Or Download Files Manually</p>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                       <Button
                         size="sm"
