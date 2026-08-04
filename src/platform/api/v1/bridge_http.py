@@ -12,7 +12,8 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from platform.core.logging import get_logger
-from platform.db.models import Account, Terminal
+from platform.core.security import verify_api_key
+from platform.db.models import Account, APIKey, Broker, Terminal
 from platform.db.session import db_context
 from platform.events.bus import get_event_bus
 from platform.events.topics import Topic
@@ -20,6 +21,7 @@ from platform.infrastructure.mt5_bridge.command_queue import get_command_queue
 from platform.infrastructure.mt5_bridge.protocol import BridgeMessage
 from platform.infrastructure.mt5_bridge.registry import TerminalRecord, get_registry
 from typing import Any
+from uuid import UUID
 
 from fastapi import APIRouter
 from pydantic import BaseModel
@@ -76,6 +78,118 @@ class ReportPayload(BaseModel):
     payload: dict[str, Any] = {}
 
 
+# ── Helpers ────────────────────────────────────────────────────────────────
+
+
+async def _resolve_org_id_from_token(auth_token: str | None) -> UUID | None:
+    """Resolve an API-key auth_token to its org_id.
+
+    Returns None if the token is missing, malformed, or doesn't match any
+    APIKey row. This is best-effort — the terminal still gets registered in
+    the in-memory registry even if we can't resolve the org.
+    """
+    if not auth_token or len(auth_token) < 8:
+        return None
+    prefix = auth_token[:8]
+    try:
+        async with db_context() as db:
+            stmt = select(APIKey).where(APIKey.key_prefix == prefix)
+            api_key = (await db.execute(stmt)).scalar_one_or_none()
+            if api_key is None:
+                return None
+            if not verify_api_key(auth_token, api_key.key_hash):
+                return None
+            return api_key.org_id
+    except Exception:
+        _log.warning("org_id_resolution_failed", exc_info=True)
+        return None
+
+
+async def _find_or_create_broker(org_id: UUID, broker_name: str) -> UUID:
+    """Find an existing Broker row or create one for the org+broker name."""
+    async with db_context() as db:
+        stmt = select(Broker).where(
+            Broker.org_id == org_id,
+            Broker.code == broker_name.lower().replace(" ", "_"),
+        )
+        broker = (await db.execute(stmt)).scalar_one_or_none()
+        if broker is not None:
+            return broker.id
+        # Create a broker record
+        broker = Broker(
+            org_id=org_id,
+            name=broker_name,
+            code=broker_name.lower().replace(" ", "_"),
+            adapter_kind="mt5",
+            is_active=True,
+        )
+        db.add(broker)
+        await db.commit()
+        await db.refresh(broker)
+        return broker.id
+
+
+async def _persist_terminal(
+    terminal_id: str,
+    org_id: UUID,
+    broker_name: str,
+    account: str,
+    version: str | None,
+    symbols: list[str],
+    capabilities: dict,
+) -> None:
+    """Upsert a Terminal row in PostgreSQL so the terminal persists across restarts."""
+    try:
+        broker_id = await _find_or_create_broker(org_id, broker_name)
+        async with db_context() as db:
+            stmt = select(Terminal).where(Terminal.terminal_id == terminal_id)
+            terminal = (await db.execute(stmt)).scalar_one_or_none()
+            now = datetime.now(UTC)
+            if terminal is None:
+                terminal = Terminal(
+                    org_id=org_id,
+                    broker_id=broker_id,
+                    terminal_id=terminal_id,
+                    broker_account=account,
+                    adapter_kind="mt5",
+                    version=version,
+                    status="online",
+                    last_heartbeat_at=now,
+                    capabilities=capabilities,
+                    symbols=symbols,
+                    settings={},
+                )
+                db.add(terminal)
+            else:
+                # Update existing record
+                terminal.status = "online"
+                terminal.last_heartbeat_at = now
+                terminal.version = version
+                terminal.symbols = symbols
+                terminal.capabilities = capabilities
+            await db.commit()
+    except Exception:
+        _log.warning("terminal_persist_failed", terminal_id=terminal_id, exc_info=True)
+
+
+async def _update_terminal_heartbeat(terminal_id: str) -> None:
+    """Lightweight DB update — set status=online and bump last_heartbeat_at."""
+    try:
+        async with db_context() as db:
+            stmt = select(Terminal).where(Terminal.terminal_id == terminal_id)
+            terminal = (await db.execute(stmt)).scalar_one_or_none()
+            if terminal is None:
+                return
+            terminal.status = "online"
+            terminal.last_heartbeat_at = datetime.now(UTC)
+            await db.commit()
+    except Exception:
+        _log.debug("heartbeat_db_update_failed", terminal_id=terminal_id, exc_info=True)
+
+
+# ── Endpoints ──────────────────────────────────────────────────────────────
+
+
 @router.post("/register")
 async def register_terminal(payload: RegisterPayload) -> dict:
     """Register MT5 terminal via native WebRequest."""
@@ -90,6 +204,31 @@ async def register_terminal(payload: RegisterPayload) -> dict:
         session=HttpSession(session_id=f"http-{payload.terminal_id}"),
     )
     await registry.register(record)
+
+    # Persist to PostgreSQL so the terminal survives restarts and shows on dashboard
+    org_id = await _resolve_org_id_from_token(payload.auth_token)
+    if org_id is not None:
+        await _persist_terminal(
+            terminal_id=payload.terminal_id,
+            org_id=org_id,
+            broker_name=payload.broker or "Exness",
+            account=str(payload.account),
+            version=payload.version,
+            symbols=payload.symbols,
+            capabilities=payload.capabilities,
+        )
+        _log.info(
+            "terminal_persisted_to_db",
+            terminal_id=payload.terminal_id,
+            org_id=str(org_id),
+        )
+    else:
+        _log.warning(
+            "terminal_registered_no_org",
+            terminal_id=payload.terminal_id,
+            hint="auth_token could not be resolved to an org_id; terminal is in-memory only",
+        )
+
     return {"status": "registered", "terminal_id": payload.terminal_id}
 
 
@@ -139,7 +278,13 @@ async def poll_terminal(payload: PollPayload) -> dict:
     bus = get_event_bus()
     await bus.publish(Topic.ACCOUNT_UPDATES, snapshot)
 
-    # Best-effort DB upsert — skip silently if no Terminal row exists yet.
+    # Best-effort DB updates — keep the Terminal row's heartbeat fresh and
+    # persist account data so it survives restarts.
+    try:
+        await _update_terminal_heartbeat(payload.terminal_id)
+    except Exception:
+        _log.debug("heartbeat_persist_skipped", terminal_id=payload.terminal_id)
+
     try:
         await _persist_account(payload.terminal_id, snapshot)
     except Exception:

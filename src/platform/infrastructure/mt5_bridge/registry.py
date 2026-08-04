@@ -212,6 +212,25 @@ class TerminalRegistry:
             await rec.session.close(code=4002, reason=reason)
         finally:
             await self.unregister(terminal_id, reason=reason)
+            # Best-effort: mark terminal offline in DB so dashboard shows correct status
+            try:
+                await self._mark_offline_in_db(terminal_id)
+            except Exception:
+                _log.debug("db_offline_mark_failed", terminal_id=terminal_id, exc_info=True)
+
+    async def _mark_offline_in_db(self, terminal_id: str) -> None:
+        """Update the Terminal row in PostgreSQL to status='offline'."""
+        from platform.db.models import Terminal
+        from platform.db.session import db_context
+        from sqlalchemy import select
+
+        async with db_context() as db:
+            stmt = select(Terminal).where(Terminal.terminal_id == terminal_id)
+            terminal = (await db.execute(stmt)).scalar_one_or_none()
+            if terminal is not None:
+                terminal.status = "offline"
+                await db.commit()
+
 
 
 # Singleton per process
