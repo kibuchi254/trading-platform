@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.11.0 (2026-08-04)
+
+### Features
+
+- **terminals**: Merge live online registry records into list_terminals REST endpoint
+  ([`0c0e5ec`](https://github.com/kibuchi254/trading-platform/commit/0c0e5ec77ceb47d517ba7293866391c30676c23a))
+
+
 ## v1.10.2 (2026-08-04)
 
 ### Bug Fixes
