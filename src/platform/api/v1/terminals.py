@@ -140,6 +140,21 @@ async def sync_account(
     terminal_id: str,
     user: CurrentUser = Depends(get_current_user),
 ) -> dict[str, object]:
+    """Return the latest cached account state for the terminal.
+
+    For HTTP-polling terminals the EA pushes balance/equity/margin every few
+    seconds via /bridge-http/poll, so we return the cached snapshot directly —
+    sending a cmd.account.sync would 500 (HttpSession has no send()) and is
+    redundant. For WebSocket terminals we fall back to the bridge command if
+    no snapshot is cached yet.
+    """
+    registry = get_registry()
+    snapshot = await registry.get_account(terminal_id)
+    if snapshot is not None:
+        return {"status": "ok", "account": snapshot}
+
+    # No cached snapshot (e.g. WS terminal that hasn't pushed an update) —
+    # ask the terminal to sync. Requires a real WS BridgeSession.send.
     from platform.infrastructure.mt5_bridge.client import get_bridge_client
 
     reply = await get_bridge_client().sync_account(terminal_id=terminal_id)

@@ -138,19 +138,21 @@ async def handle_position_update(msg: BridgeMessage, session: BridgeSession) -> 
 
 async def handle_account_update(msg: BridgeMessage, session: BridgeSession) -> None:
     payload = AccountUpdatePayload(**msg.payload)
+    snapshot = {
+        "terminal_id": msg.terminal_id,
+        "balance": payload.balance,
+        "equity": payload.equity,
+        "margin": payload.margin,
+        "free_margin": payload.free_margin,
+        "currency": payload.currency,
+        "leverage": payload.leverage,
+    }
+    # Cache on the registry record so the sync-account endpoint / GET account
+    # can return the latest state without re-sending a command.
+    registry = get_registry()
+    await registry.set_account(msg.terminal_id or "", snapshot)
     bus = get_event_bus()
-    await bus.publish(
-        Topic.ACCOUNT_UPDATES,
-        {
-            "terminal_id": msg.terminal_id,
-            "balance": payload.balance,
-            "equity": payload.equity,
-            "margin": payload.margin,
-            "free_margin": payload.free_margin,
-            "currency": payload.currency,
-            "leverage": payload.leverage,
-        },
-    )
+    await bus.publish(Topic.ACCOUNT_UPDATES, snapshot)
 
 
 async def handle_error(msg: BridgeMessage, session: BridgeSession) -> None:

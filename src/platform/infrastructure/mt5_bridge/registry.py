@@ -15,6 +15,7 @@ from datetime import UTC, datetime, timedelta
 from platform.core.exceptions import TerminalOffline
 from platform.core.logging import get_logger
 from platform.core.telemetry import TERMINALS_ONLINE
+from platform.infrastructure.mt5_bridge.protocol import BridgeMessage
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -37,6 +38,13 @@ class TerminalRecord:
     registered_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     last_heartbeat_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     status: str = "online"  # online | degraded | offline
+    # Latest account state pushed by the terminal (balance/equity/margin/...).
+    # None until the first ACCOUNT_UPDATE / poll arrives.
+    account_snapshot: dict | None = None
+    account_updated_at: datetime | None = None
+    # Outbound commands awaiting delivery to an HTTP-polling terminal.
+    # WebSocket sessions push immediately (send()), so this stays empty for them.
+    outbox: list = field(default_factory=list)
 
     def is_alive(self, timeout_seconds: int) -> bool:
         return (datetime.now(UTC) - self.last_heartbeat_at) < timedelta(seconds=timeout_seconds)
@@ -98,6 +106,47 @@ class TerminalRegistry:
     async def list_online(self) -> list[TerminalRecord]:
         async with self._lock:
             return list(self._terminals.values())
+
+    async def set_account(self, terminal_id: str, snapshot: dict) -> None:
+        """Cache the latest account state pushed by the terminal."""
+        async with self._lock:
+            rec = self._terminals.get(terminal_id)
+            if rec is None:
+                return
+            rec.account_snapshot = snapshot
+            rec.account_updated_at = datetime.now(UTC)
+
+    async def get_account(self, terminal_id: str) -> dict | None:
+        async with self._lock:
+            rec = self._terminals.get(terminal_id)
+            return rec.account_snapshot if rec else None
+
+    async def enqueue_outbound(self, terminal_id: str, msg: BridgeMessage) -> bool:
+        """Route an outbound command. WebSocket sessions are pushed immediately;
+        HTTP-polling sessions are queued for the next /poll response. Returns
+        False if the terminal isn't registered (caller should raise)."""
+        async with self._lock:
+            rec = self._terminals.get(terminal_id)
+            if rec is None:
+                return False
+            send = getattr(rec.session, "send", None)
+            if callable(send):
+                # WebSocket — push now (outside the lock via the session's own lock).
+                await send(msg)
+            else:
+                # HTTP — queue for the next poll. Cap to avoid unbounded growth.
+                if len(rec.outbox) < 64:
+                    rec.outbox.append(msg)
+            return True
+
+    async def drain_outbox(self, terminal_id: str) -> list:
+        """Return + clear pending outbound commands for an HTTP-polling terminal."""
+        async with self._lock:
+            rec = self._terminals.get(terminal_id)
+            if rec is None:
+                return []
+            cmds, rec.outbox = rec.outbox, []
+            return cmds
 
     async def select_for_symbol(
         self, symbol: str, *, preferred_broker: str | None = None

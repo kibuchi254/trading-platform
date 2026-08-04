@@ -37,6 +37,9 @@ class CommandQueue:
     def __init__(self) -> None:
         # terminal_id -> {command_id: PendingCommand}
         self._pending: dict[str, dict[str, PendingCommand]] = {}
+        # client_order_id -> command_id — lets HTTP /report (which doesn't echo
+        # the command id) resolve a pending place_order command.
+        self._correlation: dict[str, str] = {}
         self._lock = asyncio.Lock()
         self._timeout_task: asyncio.Task | None = None
 
@@ -79,6 +82,10 @@ class CommandQueue:
         async with self._lock:
             bucket = self._pending.get(terminal_id, {})
             pending = bucket.pop(command_id, None)
+            # Drop any correlation pointing at this command.
+            for coid, cid in list(self._correlation.items()):
+                if cid == command_id:
+                    self._correlation.pop(coid, None)
         if pending is None:
             _log.warning(
                 "reply_for_unknown_command", terminal_id=terminal_id, command_id=command_id
@@ -92,10 +99,30 @@ class CommandQueue:
         if not pending.future.done():
             pending.future.set_result(reply)
 
+    async def register_correlation(self, client_order_id: str, command_id: str) -> None:
+        """Map a client_order_id → command_id so an HTTP /report (which echoes
+        client_order_id, not the command id) can resolve the pending command."""
+        async with self._lock:
+            self._correlation[client_order_id] = command_id
+
+    async def resolve_by_correlation(
+        self, terminal_id: str, client_order_id: str, reply: BridgeMessage
+    ) -> None:
+        """Resolve a pending command via its client_order_id (HTTP terminals)."""
+        async with self._lock:
+            command_id = self._correlation.pop(client_order_id, None)
+        if command_id is None:
+            return
+        await self.resolve(terminal_id, command_id, reply)
+
     async def fail_all(self, terminal_id: str, exc: Exception) -> None:
         """Fail every pending command for a terminal (used on disconnect)."""
         async with self._lock:
             bucket = self._pending.pop(terminal_id, {})
+            for cid in bucket:
+                for coid, mapped in list(self._correlation.items()):
+                    if mapped == cid:
+                        self._correlation.pop(coid, None)
         for cmd_id, pending in bucket.items():
             BRIDGE_COMMANDS.labels(
                 command=pending.command.t, terminal_id=terminal_id, result="error"
@@ -110,6 +137,9 @@ class CommandQueue:
         async with self._lock:
             bucket = self._pending.get(terminal_id, {})
             pending = bucket.pop(command_id, None)
+            for coid, mapped in list(self._correlation.items()):
+                if mapped == command_id:
+                    self._correlation.pop(coid, None)
         if pending is None:
             return
         BRIDGE_COMMANDS.labels(
