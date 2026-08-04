@@ -2,6 +2,25 @@
 
 <!-- version list -->
 
+## v1.12.3 (2026-08-04)
+
+### Bug Fixes
+
+- Make terminals persist reliably across restarts and page refreshes
+  ([`b389f97`](https://github.com/kibuchi254/trading-platform/commit/b389f9705af335246044b3d066224fa64933fd8c))
+
+### Code Style
+
+- Fix ruff I001 import ordering in registry.py
+  ([`27f7c42`](https://github.com/kibuchi254/trading-platform/commit/27f7c42b7ffbc7fe1e443729a774a0c734eaed1e))
+
+- Fix two blank lines before module-level code
+  ([`e161186`](https://github.com/kibuchi254/trading-platform/commit/e161186c6c2097b75fcdedce868c0070ba26c21b))
+
+- Remove extra blank line for ruff format
+  ([`3bc2f58`](https://github.com/kibuchi254/trading-platform/commit/3bc2f58631e1eb0add2ada629d0b6f0b8f994030))
+
+
 ## v1.12.2 (2026-08-04)
 
 ### Bug Fixes
