@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.9.0 (2026-08-04)
+
+### Features
+
+- **terminals**: Add 1-click Windows Auto-Installer (.bat) generator
+  ([`c0d4924`](https://github.com/kibuchi254/trading-platform/commit/c0d4924fd68d531538d43b4d09dcfda444d4e1aa))
+
+
 ## v1.8.1 (2026-08-03)
 
 ### Bug Fixes
