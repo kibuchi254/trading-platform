@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.9.1 (2026-08-04)
+
+### Bug Fixes
+
+- **mql5**: Resolve sign mismatch and TERMINAL_BUILD compilation errors in BridgeEA.mq5
+  ([`2927828`](https://github.com/kibuchi254/trading-platform/commit/292782867e796ca37a783ead577f28861be022f2))
+
+
 ## v1.9.0 (2026-08-04)
 
 ### Features
