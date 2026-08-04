@@ -5,19 +5,13 @@ export async function GET() {
 //|                                                      BridgeEA.mq5 |
 //|                            ATLAS Trading Platform — MT5 Bridge EA |
 //|                                                                  |
-//| This EA runs inside MetaTrader 5 (under Wine on the host). It     |
-//| opens a WebSocket connection to the ATLAS Bridge Service,         |
-//| registers itself, streams ticks + execution reports, and          |
-//| executes commands (place/cancel/modify order, close position).   |
-//|                                                                  |
-//| The backend NEVER talks to MT5 directly — only through this EA.  |
-//| Replacing MT5 with another adapter means writing a new bridge     |
-//| client for that venue; the platform core stays unchanged.         |
+//| Native Zero-DLL MT5 Expert Advisor using MQL5 WebRequest().      |
+//| Requires NO DLL files or external libraries!                      |
 //+------------------------------------------------------------------+
 #property strict
-#property version   "1.00"
+#property version   "2.00"
 #property copyright "ATLAS Platform"
-#property description "ATLAS Bridge EA — connects MT5 to the ATLAS backend"
+#property description "ATLAS Bridge EA — Zero-DLL native MQL5 Expert Advisor"
 
 #include <Trade\\Trade.mqh>
 #include <Trade\\PositionInfo.mqh>
@@ -25,32 +19,55 @@ export async function GET() {
 #include <Trade\\DealInfo.mqh>
 
 //--- inputs
-input string   InpBridgeUrl         = "wss://backend.vorte.dev/bridge/";
+input string   InpBridgeUrl         = "https://backend.vorte.dev";
 input string   InpTerminalId        = "mt5-terminal-01";
 input string   InpBroker            = "Exness";
 input string   InpAuthToken         = "your-bridge-auth-token";
 input string   InpSymbolsCSV        = "XAUUSD,EURUSD,GBPUSD,USDJPY";
-input int      InpHeartbeatSeconds  = 10;
-input int      InpReconnectMs       = 3000;
+input int      InpHeartbeatSeconds  = 2;
 input int      InpMagic             = 770000;
-
-//--- WebSocket is implemented via a DLL (atlas_bridge.dll) shipped alongside the EA.
-#import "atlas_bridge.dll"
-   int      ws_connect(string url);
-   void     ws_close(int handle);
-   int      ws_send(int handle, string msg);
-   string   ws_recv(int handle, int timeout_ms);
-   bool     ws_is_open(int handle);
-#import
 
 CTrade              trade;
 CPositionInfo       posInfo;
 CHistoryOrderInfo   histOrder;
 CDealInfo           dealInfo;
 
-int    g_wsHandle    = -1;
 ulong  g_lastHeartbeat = 0;
 string g_symbols[];
+
+//+------------------------------------------------------------------+
+//| Helper: Send HTTP POST request via MQL5 WebRequest               |
+//+------------------------------------------------------------------+
+int HttpPost(string endpoint, string payloadJson, string &responseStr)
+{
+   char data[];
+   char result[];
+   string result_headers;
+   StringToCharArray(payloadJson, data, 0, StringLen(payloadJson));
+
+   string fullUrl = InpBridgeUrl + endpoint;
+   string headers = "Content-Type: application/json\\r\\nAuthorization: Bearer " + InpAuthToken + "\\r\\n";
+
+   ResetLastError();
+   int res = WebRequest("POST", fullUrl, headers, 3000, data, result, result_headers);
+   if(res == 200)
+   {
+      responseStr = CharArrayToString(result);
+   }
+   else if(res < 0)
+   {
+      int err = GetLastError();
+      if(err == 4060)
+      {
+         Print("[ATLAS ERROR] WebRequest not allowed! Add '", InpBridgeUrl, "' to Tools -> Options -> Expert Advisors -> Allow WebRequest.");
+      }
+      else
+      {
+         Print("[ATLAS ERROR] WebRequest failed. err=", err, " code=", res);
+      }
+   }
+   return res;
+}
 
 void PopulateSymbols()
 {
@@ -82,25 +99,36 @@ int OnInit()
    trade.SetExpertMagicNumber(InpMagic);
    PopulateSymbols();
 
-   Print("[ATLAS] BridgeEA starting. terminal=", InpTerminalId, " broker=", InpBroker);
+   Print("[ATLAS] Zero-DLL BridgeEA starting. terminal=", InpTerminalId, " broker=", InpBroker);
 
-   if(!ConnectAndRegister())
+   string resp;
+   string symbolsJson = ArrayToJson(g_symbols);
+   string regMsg = StringFormat(
+      "{\\"terminal_id\\":\\"%s\\",\\"broker\\":\\"%s\\",\\"account\\":%I64u,"
+      "\\"version\\":\\"%s\\",\\"symbols\\":%s,\\"auth_token\\":\\"%s\\","
+      "\\"capabilities\\":{\\"market\\":true,\\"limit\\":true,\\"stop\\":true,\\"close_partial\\":true}}",
+      InpTerminalId, InpBroker,
+      AccountInfoInteger(ACCOUNT_LOGIN),
+      IntegerToString((int)TerminalInfoInteger(TERMINAL_BUILD)),
+      symbolsJson, InpAuthToken);
+
+   int code = HttpPost("/api/v1/bridge-http/register", regMsg, resp);
+   if(code == 200)
    {
-      Print("[ATLAS] Initial connect failed; will retry in timer.");
+      Print("[ATLAS] Registered successfully with backend over HTTPS!");
+   }
+   else
+   {
+      Print("[ATLAS] Initial registration pending; will retry in timer. code=", code);
    }
 
-   EventSetTimer(1);  // 1-second tick for housekeeping
+   EventSetTimer(InpHeartbeatSeconds);
    return INIT_SUCCEEDED;
 }
 
 //+------------------------------------------------------------------+
 void OnDeinit(const int reason)
 {
-   if(g_wsHandle >= 0)
-   {
-      ws_close(g_wsHandle);
-      g_wsHandle = -1;
-   }
    EventKillTimer();
    Print("[ATLAS] BridgeEA stopped. reason=", reason);
 }
@@ -108,91 +136,36 @@ void OnDeinit(const int reason)
 //+------------------------------------------------------------------+
 void OnTimer()
 {
-   // 1. Maintain connection
-   if(g_wsHandle < 0 || !ws_is_open(g_wsHandle))
-   {
-      Sleep(InpReconnectMs);
-      ConnectAndRegister();
-      return;
-   }
+   string resp;
+   string pollPayload = StringFormat(
+      "{\\"terminal_id\\":\\"%s\\",\\"balance\\":%.2f,\\"equity\\":%.2f,"
+      "\\"margin\\":%.2f,\\"free_margin\\":%.2f,\\"currency\\":\\"%s\\","
+      "\\"leverage\\":%d,\\"auth_token\\":\\"%s\\"}",
+      InpTerminalId,
+      AccountInfoDouble(ACCOUNT_BALANCE),
+      AccountInfoDouble(ACCOUNT_EQUITY),
+      AccountInfoDouble(ACCOUNT_MARGIN),
+      AccountInfoDouble(ACCOUNT_MARGIN_FREE),
+      AccountInfoString(ACCOUNT_CURRENCY),
+      (int)AccountInfoInteger(ACCOUNT_LEVERAGE),
+      InpAuthToken);
 
-   // 2. Drain incoming messages
-   string msg;
-   while((msg = ws_recv(g_wsHandle, 0)) != "")
+   int code = HttpPost("/api/v1/bridge-http/poll", pollPayload, resp);
+   if(code == 200 && StringLen(resp) > 0)
    {
-      HandleIncoming(msg);
-   }
-
-   // 3. Heartbeat
-   if(GetTickCount64() - g_lastHeartbeat > (ulong)(InpHeartbeatSeconds * 1000))
-   {
-      SendHeartbeat();
+      HandleIncoming(resp);
    }
 }
 
 //+------------------------------------------------------------------+
 void OnTick()
 {
-   // Stream ticks for every configured symbol
    for(int i = 0; i < ArraySize(g_symbols); i++)
    {
       SymbolInfoTickStream(g_symbols[i]);
    }
 }
 
-//+------------------------------------------------------------------+
-//| Connect & register with the Bridge                               |
-//+------------------------------------------------------------------+
-bool ConnectAndRegister()
-{
-   g_wsHandle = ws_connect(InpBridgeUrl);
-   if(g_wsHandle < 0)
-   {
-      Print("[ATLAS] ws_connect failed: ", g_wsHandle);
-      return false;
-   }
-
-   string symbolsJson = ArrayToJson(g_symbols);
-   string regMsg = StringFormat(
-      "{\\"v\\":1,\\"t\\":\\"evt.register\\",\\"terminal_id\\":\\"%s\\","
-      "\\"payload\\":{\\"terminal_id\\":\\"%s\\",\\"broker\\":\\"%s\\","
-      "\\"account\\":%I64u,\\"version\\":\\"%s\\",\\"symbols\\":%s,"
-      "\\"auth_token\\":\\"%s\\",\\"capabilities\\":{\\"market\\":true,\\"limit\\":true,"
-      "\\"stop\\":true,\\"close_partial\\":true}}}",
-      InpTerminalId, InpTerminalId, InpBroker,
-      AccountInfoInteger(ACCOUNT_LOGIN),
-      IntegerToString((int)TerminalInfoInteger(TERMINAL_BUILD)),
-      symbolsJson, InpAuthToken);
-
-   int sent = ws_send(g_wsHandle, regMsg);
-   if(sent <= 0)
-   {
-      Print("[ATLAS] register send failed");
-      ws_close(g_wsHandle);
-      g_wsHandle = -1;
-      return false;
-   }
-   g_lastHeartbeat = GetTickCount64();
-   Print("[ATLAS] Registered with bridge.");
-   return true;
-}
-
-//+------------------------------------------------------------------+
-//| Heartbeat                                                        |
-//+------------------------------------------------------------------+
-void SendHeartbeat()
-{
-   if(g_wsHandle < 0) return;
-   string hb = StringFormat(
-      "{\\"v\\":1,\\"t\\":\\"evt.heartbeat\\",\\"terminal_id\\":\\"%s\\","
-      "\\"payload\\":{\\"terminal_id\\":\\"%s\\",\\"latency_ms\\":0}}",
-      InpTerminalId, InpTerminalId);
-   ws_send(g_wsHandle, hb);
-   g_lastHeartbeat = GetTickCount64();
-}
-
-//+------------------------------------------------------------------+
-//| Stream a tick for a symbol                                       |
 //+------------------------------------------------------------------+
 void SymbolInfoTickStream(string sym)
 {
@@ -216,17 +189,16 @@ void SymbolInfoTickStream(string sym)
    last_time[idx] = tk.time_msc;
    last_bid[idx]  = tk.bid;
 
+   string resp;
    string tickMsg = StringFormat(
-      "{\\"v\\":1,\\"t\\":\\"evt.tick\\",\\"terminal_id\\":\\"%s\\","
-      "\\"payload\\":{\\"symbol\\":\\"%s\\",\\"bid\\":%.5f,\\"ask\\":%.5f,"
-      "\\"last\\":%.5f,\\"volume\\":%.2f,\\"ts\\":\\"%s\\"}}",
+      "{\\"terminal_id\\":\\"%s\\",\\"symbol\\":\\"%s\\",\\"bid\\":%.5f,\\"ask\\":%.5f,"
+      "\\"last\\":%.5f,\\"volume\\":%.2f,\\"ts\\":\\"%s\\"}",
       InpTerminalId, sym, tk.bid, tk.ask, tk.last, tk.volume,
       TimeToString(tk.time, TIME_DATE | TIME_SECONDS));
-   ws_send(g_wsHandle, tickMsg);
+
+   HttpPost("/api/v1/bridge-http/tick", tickMsg, resp);
 }
 
-//+------------------------------------------------------------------+
-//| Handle incoming command from Bridge                              |
 //+------------------------------------------------------------------+
 void HandleIncoming(string raw)
 {
@@ -234,30 +206,12 @@ void HandleIncoming(string raw)
    {
       HandlePlaceOrder(raw);
    }
-   else if(StringFind(raw, "cmd.order.cancel") > 0)
-   {
-      HandleCancelOrder(raw);
-   }
    else if(StringFind(raw, "cmd.position.close") > 0)
    {
       HandleClosePosition(raw);
    }
-   else if(StringFind(raw, "cmd.position.sync") > 0)
-   {
-      HandleSyncPositions(raw);
-   }
-   else if(StringFind(raw, "cmd.account.sync") > 0)
-   {
-      HandleSyncAccount(raw);
-   }
-   else if(StringFind(raw, "cmd.ping") > 0)
-   {
-      ws_send(g_wsHandle, "{\\"v\\":1,\\"t\\":\\"cmd.ping\\",\\"payload\\":{\\"pong\\":true}}");
-   }
 }
 
-//+------------------------------------------------------------------+
-//| Place order                                                      |
 //+------------------------------------------------------------------+
 void HandlePlaceOrder(string raw)
 {
@@ -279,96 +233,32 @@ void HandlePlaceOrder(string raw)
    string reason = ok ? "" : "trade_request_failed";
    ulong order   = ok ? trade.ResultOrder() : 0;
 
-   string reply = StringFormat(
-      "{\\"v\\":1,\\"t\\":\\"evt.order.filled\\",\\"terminal_id\\":\\"%s\\","
+   string resp;
+   string reportPayload = StringFormat(
+      "{\\"terminal_id\\":\\"%s\\",\\"event_type\\":\\"evt.order.filled\\","
       "\\"payload\\":{\\"client_order_id\\":\\"%s\\",\\"broker_order_id\\":\\"%I64u\\","
       "\\"status\\":\\"%s\\",\\"filled_volume\\":%.4f,\\"avg_price\\":%.5f,"
-      "\\"rejection_reason\\":\\"%s\\",\\"executed_at\\":\\"%s\\"}}",
+      "\\"rejection_reason\\":\\"%s\\"}}",
       InpTerminalId, clientOrderId, order, status,
-      ok ? volume : 0.0, ok ? trade.ResultPrice() : 0.0,
-      reason, TimeToString(TimeCurrent(), TIME_DATE | TIME_SECONDS));
-   ws_send(g_wsHandle, reply);
+      ok ? volume : 0.0, ok ? trade.ResultPrice() : 0.0, reason);
+
+   HttpPost("/api/v1/bridge-http/report", reportPayload, resp);
 }
 
-//+------------------------------------------------------------------+
-//| Cancel order                                                     |
-//+------------------------------------------------------------------+
-void HandleCancelOrder(string raw)
-{
-   ulong brokerOrderId = (ulong)StringToInteger(ExtractStringField(raw, "broker_order_id"));
-   bool ok = trade.OrderDelete(brokerOrderId);
-   string reply = StringFormat(
-      "{\\"v\\":1,\\"t\\":\\"evt.order.cancelled\\",\\"terminal_id\\":\\"%s\\","
-      "\\"payload\\":{\\"broker_order_id\\":\\"%I64u\\",\\"status\\":\\"%s\\"}}",
-      InpTerminalId, brokerOrderId, ok ? "cancelled" : "rejected");
-   ws_send(g_wsHandle, reply);
-}
-
-//+------------------------------------------------------------------+
-//| Close position                                                   |
 //+------------------------------------------------------------------+
 void HandleClosePosition(string raw)
 {
    ulong posId = (ulong)StringToInteger(ExtractStringField(raw, "broker_position_id"));
    double volume = ExtractDoubleField(raw, "volume");
    bool ok = trade.PositionClosePartial(posId, volume > 0 ? volume : 0);
-   string reply = StringFormat(
-      "{\\"v\\":1,\\"t\\":\\"evt.position.closed\\",\\"terminal_id\\":\\"%s\\","
+
+   string resp;
+   string reportPayload = StringFormat(
+      "{\\"terminal_id\\":\\"%s\\",\\"event_type\\":\\"evt.position.closed\\","
       "\\"payload\\":{\\"broker_position_id\\":\\"%I64u\\",\\"status\\":\\"%s\\"}}",
       InpTerminalId, posId, ok ? "closed" : "rejected");
-   ws_send(g_wsHandle, reply);
-}
 
-//+------------------------------------------------------------------+
-//| Sync all positions                                               |
-//+------------------------------------------------------------------+
-void HandleSyncPositions(string raw)
-{
-   string positions = "[";
-   int total = PositionsTotal();
-   for(int i = 0; i < total; i++)
-   {
-      if(posInfo.SelectByIndex(i))
-      {
-         if(i > 0) positions += ",";
-         positions += StringFormat(
-            "{\\"broker_position_id\\":\\"%I64u\\",\\"symbol\\":\\"%s\\","
-            "\\"side\\":\\"%s\\",\\"volume\\":%.4f,\\"open_price\\":%.5f,"
-            "\\"current_price\\":%.5f,\\"swap\\":%.5f,\\"unrealized_pnl\\":%.2f,"
-            "\\"opened_at\\":\\"%s\\"}",
-            posInfo.Ticket(), posInfo.Symbol(),
-            posInfo.PositionType() == POSITION_TYPE_BUY ? "buy" : "sell",
-            posInfo.Volume(), posInfo.PriceOpen(), posInfo.PriceCurrent(),
-            posInfo.Swap(), posInfo.Profit(),
-            TimeToString((datetime)posInfo.Time(), TIME_DATE | TIME_SECONDS));
-      }
-   }
-   positions += "]";
-
-   string reply = StringFormat(
-      "{\\"v\\":1,\\"t\\":\\"cmd.position.sync\\",\\"terminal_id\\":\\"%s\\","
-      "\\"payload\\":{\\"positions\\":%s}}",
-      InpTerminalId, positions);
-   ws_send(g_wsHandle, reply);
-}
-
-//+------------------------------------------------------------------+
-//| Sync account                                                     |
-//+------------------------------------------------------------------+
-void HandleSyncAccount(string raw)
-{
-   string reply = StringFormat(
-      "{\\"v\\":1,\\"t\\":\\"evt.account.update\\",\\"terminal_id\\":\\"%s\\","
-      "\\"payload\\":{\\"balance\\":%.2f,\\"equity\\":%.2f,\\"margin\\":%.2f,"
-      "\\"free_margin\\":%.2f,\\"currency\\":\\"%s\\",\\"leverage\\":%d}}",
-      InpTerminalId,
-      AccountInfoDouble(ACCOUNT_BALANCE),
-      AccountInfoDouble(ACCOUNT_EQUITY),
-      AccountInfoDouble(ACCOUNT_MARGIN),
-      AccountInfoDouble(ACCOUNT_MARGIN_FREE),
-      AccountInfoString(ACCOUNT_CURRENCY),
-      (int)AccountInfoInteger(ACCOUNT_LEVERAGE));
-   ws_send(g_wsHandle, reply);
+   HttpPost("/api/v1/bridge-http/report", reportPayload, resp);
 }
 
 //+------------------------------------------------------------------+
