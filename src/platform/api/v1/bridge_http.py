@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List
-from fastapi import APIRouter, Header, HTTPException, status
-from pydantic import BaseModel
-
 from platform.infrastructure.mt5_bridge.registry import get_registry
+from typing import Any
+
+from fastapi import APIRouter
+from pydantic import BaseModel
 
 router = APIRouter(prefix="/bridge-http", tags=["bridge-http"])
 
@@ -16,9 +16,9 @@ class RegisterPayload(BaseModel):
     broker: str | None = "Exness"
     account: int | str = 0
     version: str | None = "1.00"
-    symbols: List[str] = []
+    symbols: list[str] = []
     auth_token: str | None = None
-    capabilities: Dict[str, Any] = {}
+    capabilities: dict[str, Any] = {}
 
 
 class TickPayload(BaseModel):
@@ -45,7 +45,7 @@ class PollPayload(BaseModel):
 class ReportPayload(BaseModel):
     terminal_id: str
     event_type: str
-    payload: Dict[str, Any]
+    payload: dict[str, Any]
 
 
 @router.post("/register")
