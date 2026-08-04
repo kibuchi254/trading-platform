@@ -59,7 +59,9 @@ async def list_terminals(
                 adapter_kind=r.adapter_kind,
                 version=r.version if not live else live.version,
                 status="online" if is_online else r.status,
-                last_heartbeat_at=live.last_heartbeat_at.isoformat() if live and live.last_heartbeat_at else (r.last_heartbeat_at.isoformat() if r.last_heartbeat_at else None),
+                last_heartbeat_at=live.last_heartbeat_at.isoformat()
+                if live and live.last_heartbeat_at
+                else (r.last_heartbeat_at.isoformat() if r.last_heartbeat_at else None),
                 symbols=r.symbols if not live else live.symbols,
                 capabilities=r.capabilities if not live else live.capabilities,
                 is_online=is_online,
@@ -79,7 +81,9 @@ async def list_terminals(
                     adapter_kind="mt5",
                     version=live.version,
                     status="online",
-                    last_heartbeat_at=live.last_heartbeat_at.isoformat() if live.last_heartbeat_at else None,
+                    last_heartbeat_at=live.last_heartbeat_at.isoformat()
+                    if live.last_heartbeat_at
+                    else None,
                     symbols=live.symbols,
                     capabilities=live.capabilities,
                     is_online=True,

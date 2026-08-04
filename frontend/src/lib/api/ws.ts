@@ -8,9 +8,10 @@
 import { useEffect, useRef, useState } from "react";
 
 import { getAccessToken, WS_URL } from "./client";
-import type { TickStream } from "./types";
+import { syncAccount } from "./endpoints";
+import type { AccountState, TickStream } from "./types";
 
-type WSKind = "ticks" | "terminal-events";
+type WSKind = "ticks" | "terminal-events" | "account";
 
 function buildUrl(kind: WSKind): string | null {
   const token = getAccessToken();
@@ -145,4 +146,74 @@ export function useTerminalEvents(): Record<string, unknown>[] {
   }, []);
 
   return events;
+}
+
+/**
+ * Live account state for a connected MT5 terminal.
+ *
+ * Seeds from `POST /api/v1/terminals/{id}/sync-account` (the bridge asks the
+ * terminal for its current balance/equity/margin), then merges live
+ * `evt.account.update` events streamed over /ws/account.
+ *
+ * Pass `null` when no terminal is connected — the hook becomes a no-op.
+ */
+export function useAccount(terminalId: string | null): {
+  account: AccountState | null;
+  loading: boolean;
+  error: Error | null;
+} {
+  const [account, setAccount] = useState<AccountState | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+
+  // Seed via REST whenever the selected terminal changes.
+  useEffect(() => {
+    if (!terminalId) {
+      setAccount(null);
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    syncAccount(terminalId)
+      .then((res) => {
+        if (cancelled) return;
+        const a = res.account;
+        if (a && typeof a.balance === "number") {
+          setAccount({ ...(a as unknown as AccountState), terminal_id: terminalId });
+        }
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) setError(err instanceof Error ? err : new Error(String(err)));
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [terminalId]);
+
+  // Merge live updates from /ws/account, scoped to this terminal.
+  useEffect(() => {
+    if (!terminalId) return;
+    const unsub = subscribe("account", (msg) => {
+      const data = msg as unknown as AccountState & { type?: string };
+      if (data.type === "ping") return;
+      if (data.terminal_id !== terminalId) return;
+      if (typeof data.balance !== "number") return;
+      setAccount({
+        terminal_id: data.terminal_id,
+        balance: Number(data.balance),
+        equity: Number(data.equity),
+        margin: Number(data.margin),
+        free_margin: Number(data.free_margin),
+        currency: data.currency,
+        leverage: Number(data.leverage),
+      });
+    });
+    return unsub;
+  }, [terminalId]);
+
+  return { account, loading, error };
 }

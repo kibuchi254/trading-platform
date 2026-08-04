@@ -43,6 +43,14 @@ export const THEME_PRESET_OPTIONS = [
       dark: "oklch(0.64 0.17 36.44)",
     },
   },
+  {
+    label: "Neo",
+    value: "neo",
+    primary: {
+      light: "oklch(0.55 0.2 276)",
+      dark: "oklch(0.68 0.16 276)",
+    },
+  },
 ] as const;
 
 export const THEME_PRESET_VALUES = THEME_PRESET_OPTIONS.map((p) => p.value);

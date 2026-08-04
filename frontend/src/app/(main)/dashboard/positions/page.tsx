@@ -13,16 +13,36 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogT
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { closePosition, listPositions, modifyPosition } from "@/lib/api/endpoints";
+import { closePosition, listPositions, listTerminals, modifyPosition, syncPositions } from "@/lib/api/endpoints";
 import { useAsync } from "@/lib/api/hooks";
 import { formatCurrency } from "@/lib/utils";
 
 export default function PositionsPage() {
   const [status, setStatus] = useState("all");
   const { data, error, loading, reload } = useAsync(() => listPositions(status), [status]);
+  const terminals = useAsync(() => listTerminals("online"), []);
+  const connectedTerminal = terminals.data?.[0] ?? null;
+  const [syncing, setSyncing] = useState(false);
   const [modifyId, setModifyId] = useState<string | null>(null);
   const [sl, setSl] = useState("");
   const [tp, setTp] = useState("");
+
+  async function syncFromTerminal() {
+    if (!connectedTerminal) {
+      toast.error("No terminal connected");
+      return;
+    }
+    setSyncing(true);
+    try {
+      const res = await syncPositions(connectedTerminal.terminal_id);
+      toast.success(`Synced ${res.received} positions from ${connectedTerminal.terminal_id}`);
+      reload();
+    } catch (e) {
+      toast.error("Sync failed", { description: (e as Error).message });
+    } finally {
+      setSyncing(false);
+    }
+  }
 
   async function close(id: string) {
     try {
@@ -57,15 +77,20 @@ export default function PositionsPage() {
         title="Positions"
         description="Open and closed positions across all terminals."
         actions={
-          <select
-            className="h-9 rounded-md border bg-background px-2 text-sm"
-            value={status}
-            onChange={(e) => setStatus(e.target.value)}
-          >
-            <option value="all">All</option>
-            <option value="open">Open</option>
-            <option value="closed">Closed</option>
-          </select>
+          <div className="flex items-center gap-2">
+            <Button variant="secondary" size="sm" onClick={syncFromTerminal} disabled={!connectedTerminal || syncing}>
+              {syncing ? "Syncing…" : "Sync from terminal"}
+            </Button>
+            <select
+              className="h-9 rounded-md border bg-background px-2 text-sm"
+              value={status}
+              onChange={(e) => setStatus(e.target.value)}
+            >
+              <option value="all">All</option>
+              <option value="open">Open</option>
+              <option value="closed">Closed</option>
+            </select>
+          </div>
         }
       />
       <Card>
@@ -150,7 +175,7 @@ export default function PositionsPage() {
               </TableBody>
             </Table>
           ) : (
-            <p className="py-8 text-center text-sm text-muted-foreground">No positions.</p>
+            <p className="py-8 text-center text-muted-foreground text-sm">No positions.</p>
           )}
         </CardContent>
       </Card>
