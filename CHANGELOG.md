@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v1.12.1 (2026-08-04)
+
+### Bug Fixes
+
+- **bridge-http**: Persist/stream account state + ticks + command delivery
+  ([#134](https://github.com/kibuchi254/trading-platform/pull/134),
+  [`2da58b1`](https://github.com/kibuchi254/trading-platform/commit/2da58b1f58f77d5a15425b3dda795b1405b925bb))
+
+
 ## v1.12.0 (2026-08-04)
 
 ### Features
